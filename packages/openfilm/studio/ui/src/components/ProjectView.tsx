@@ -1,3 +1,5 @@
+import { StoryPane, storyData, storyLinkOps } from './StoryPane';
+import { STORY_ENTER_SCENE, STORY_LEAVE_SCENE, STORY_LOCATION_EVENT, clearStoryLocation, pendingStoryLocation, type StoryLocation } from '@/lib/story-navigation';
 /**
  * A project in Studio: the top bar, then the assets, the picture and the inspector side by side, and the timeline
  * across the bottom. Every pane floats on the darker board; the seams between them are the board showing through and
@@ -648,6 +650,26 @@ export function ProjectView({ projectId, onProject }: {
   const timelineTracks = React.useMemo<TimelineTrack[]>(() => {
     if (!film.film) return [];
     const base = withCueBlocks(layoutTracks(filmShape(film.film as unknown as FilmDoc, info?.spans ?? [], mediaFacts, Boolean(previewError))), cuesOf);
+    const storyClips = new Map(film.film.tracks.flatMap(track => track.clips.map(clip => [clip.id, clip] as const)));
+    for (const track of base) {
+      const original = track.docIndex === undefined ? undefined : film.film.tracks[track.docIndex];
+      const storyKind = original?.attrs?.['data-story-track'];
+      if (storyKind === 'scene' || storyKind === 'beat' || storyKind === 'shot') {
+        track.name = storyKind === 'scene' ? '场次划分' : original?.attrs?.title ?? track.name;
+        track.storyKind = storyKind;
+      }
+      for (const block of track.blocks) {
+        const clip = block.clipId ? storyClips.get(block.clipId) : undefined;
+        const data = clip && storyData(clip);
+        if (data) {
+          block.title = data.title;
+          block.color = data.kind === 'scene' ? '#365768' : data.kind === 'shot' ? '#65563d'
+            : original?.attrs?.['data-story-track-id'] === 'a' ? '#735d3c' : '#554772';
+          if (data.kind === 'beat' && !clip?.attrs?.['data-link']) block.storyIndependent = true;
+        }
+      }
+    }
+    base.sort((a, b) => Number(a.storyKind === 'scene') - Number(b.storyKind === 'scene'));
     const drops = generationDrop ? [...pendingDrops, generationDrop] : pendingDrops;
     return drops.length ? withPendingBlocks(base, drops) : base;
   }, [film.film, info, mediaFacts, pendingDrops, generationDrop, previewError, cuesOf]);
@@ -723,6 +745,18 @@ export function ProjectView({ projectId, onProject }: {
   const lockedSelectionRef = React.useRef(lockedSelection);
   lockedSelectionRef.current = lockedSelection;
   const [storedSelectedKeys, writeSelectedKeys] = React.useState<readonly string[]>([]);
+  const [storyFocusedId, setStoryFocusedId] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    const focusStory = (event: PointerEvent) => {
+      if (!(event.target instanceof Element)) return;
+      const id = event.target.closest('[data-block-id]')?.getAttribute('data-block-id');
+      if (!id) return;
+      const block = blocksRef.current.find(block => block.id === id);
+      if (block?.clipId) setStoryFocusedId(block.clipId);
+    };
+    document.addEventListener('pointerdown', focusStory, true);
+    return () => document.removeEventListener('pointerdown', focusStory, true);
+  }, []);
   const selectedKeys = React.useMemo(() => storedSelectedKeys.some((key) => lockedSelection.has(key))
     ? storedSelectedKeys.filter((key) => !lockedSelection.has(key)) : storedSelectedKeys, [lockedSelection, storedSelectedKeys]);
   const setSelectedKeys = React.useCallback((update: React.SetStateAction<readonly string[]>) => {
@@ -787,6 +821,8 @@ export function ProjectView({ projectId, onProject }: {
   const setInspectorOpen = React.useCallback((value: boolean) => openBlock('edit', 'inspector', value), [openBlock]);
   const layersPaneRef = React.useRef<HTMLDivElement | null>(null);
   const closeInspector = React.useCallback(() => setInspectorOpen(false), [setInspectorOpen]);
+  const storyContentMode=React.useRef(true);
+  const onStoryDisplay=React.useCallback((content:boolean)=>{storyContentMode.current=content;setInspectorOpen(!content);},[setInspectorOpen]);
   /* the timeline fits its tracks (not taller than they need, up to 45% of the window) unless the person dragged it */
   const fitTimelineHeight = React.useRef<number>(TIMELINE_H);
   if (!pendingDrops.length) {
@@ -870,7 +906,7 @@ export function ProjectView({ projectId, onProject }: {
     }
     if (picked.length) {
       setInspectorContent(cues.length === picked.length ? 'captions' : 'selection');
-      setInspectorOpen(true);
+      if(!storyContentMode.current)setInspectorOpen(true);
       setStageElement((el) => (el && el.kind !== 'clip' ? null : el));
     }
   }, [setSelectedKeys]);
@@ -1650,6 +1686,11 @@ export function ProjectView({ projectId, onProject }: {
   }, [edit, projectId]);
   /* a compound clip double-clicked: its film opened as a project of its own, which leads back here */
   const enterCompound = React.useCallback((block: TimelineBlock) => {
+    const clip=filmRef.current?.tracks.flatMap(track=>track.clips).find(clip=>clip.id===block.clipId);
+    if(clip && storyData(clip)?.kind==='scene') {
+      window.dispatchEvent(new CustomEvent(STORY_ENTER_SCENE,{detail:clip.id}));
+      return;
+    }
     const folder = compoundFolder(block.src);
     if (!folder) return;
     void api.openPartFilm(projectId, folder).then(({ project }) => onProject(project.id), (e) => toast.showError(e instanceof Error ? e.message : String(e)));
@@ -3065,6 +3106,27 @@ export function ProjectView({ projectId, onProject }: {
     const timer = setTimeout(() => setFlashRange(null), 1200);
     return () => clearTimeout(timer);
   }, [flashRange]);
+  // Read-only overview locations use the same selection, player and timeline as manual editing.
+  React.useEffect(()=>{
+    const locate=(event?:Event)=>{
+      const detail=event instanceof CustomEvent?event.detail as StoryLocation:undefined;
+      const target=detail?.projectId===projectId?detail:pendingStoryLocation(projectId);
+      if(!target||!film.film)return;
+      const exists=film.film.tracks.some(track=>track.clips.some(clip=>clip.id===target.clipId));
+      if(!exists){clearStoryLocation(projectId);toast.show('定位的内容已不存在，请刷新总览。');return;}
+      const block=blocksRef.current.find(block=>block.clipId===target.clipId);
+      if(!block)return;
+      pause();setSelectedKeys([target.clipId]);setStoryFocusedId(target.clipId);
+      seek(target.restorePosition?Math.max(0,target.atMs):Math.max(block.startMs,Math.min(target.atMs,block.endMs-1)));
+      setFlashRange({startMs:block.startMs,endMs:block.endMs});
+      clearStoryLocation(projectId);
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{
+        document.querySelector<HTMLElement>(`[data-workspace-timeline] [data-block-id="${CSS.escape(block.id)}"]`)?.scrollIntoView({block:'nearest',inline:'nearest'});
+      }));
+    };
+    locate();window.addEventListener(STORY_LOCATION_EVENT,locate);
+    return()=>window.removeEventListener(STORY_LOCATION_EVENT,locate);
+  },[projectId,film.film,timelineTracks,pause,seek,setSelectedKeys,toast]);
   rangeNowRef.current = markedRange;
   /* the film's stage, for boxes in stage px (film.html's, set below with the picture) */
   const stageRef = React.useRef({ w: 1920, h: 1080 });
@@ -5441,42 +5503,9 @@ export function ProjectView({ projectId, onProject }: {
 
   const value = film.film ?? candidate?.value ?? null;
   const viewerReady = Boolean(info);
-  return (
-    <>
-          {/* the panes, each drawn into its block's place, which the shell lays out among the page's panels
-              (shell/arrangement) with the seams between them */}
-          <>
-            <>
-              {layersShown ? (
-                <InBlock id="layers">
-                  <div ref={layersPaneRef} className={`${PANE} flex-1 bg-[var(--bg-panel)]`} data-workspace-layers>
-                    <LayersPanel
-                      ask={askStage}
-                      timeMs={timeMs}
-                      playing={playing}
-                      filmKey={layersKey}
-                      clipOf={layerClipOf}
-                      selected={layersSelected}
-                      selectedClipLocs={selectedLocs}
-                      captions={layerCaptions}
-                      onSelectRows={selectLayerRows}
-                      onPoint={setPointedLayer}
-                      onToggle={toggleLayerRow}
-                      onDelete={deleteLayerRow}
-                      onMenu={openLayerMenu}
-                      onRestack={restackLayers}
-                      onNotify={toast.show}
-                      width={layersShownWidth}
-                      onClose={() => { setPointedLayer(null); setLayersPaneOpen(false); }}
-                    />
-                  </div>
-                </InBlock>
-              ) : null}
-
-              <InBlock id="viewer">
-              <div className={`${PANE} min-w-0 flex-1 bg-[var(--bg-viewer)]`} data-viewer-pane="" inert={coverOpen}>
-                <div className={PANE_BAR}>
-                  {/* in a browser, the library opened or closed (the layers are in the layout's menu); in the app, whose
+  const storyWorkspace=Boolean(value&&(!loaded.outer||value.tracks.some(track=>track.attrs?.['data-story-track']||track.clips.some(clip=>storyData(clip)))));
+  const viewerUtilities=(<>
+{/* in a browser, the library opened or closed (the layers are in the layout's menu); in the app, whose
                       chat has the library's button, the layers and the inspector shown or hidden where the arrangement has them */}
                   {!studioHost ? (
                   <Tooltip label={t('assetDrawer.library')} side="bottom">
@@ -5511,7 +5540,42 @@ export function ProjectView({ projectId, onProject }: {
                     </button>
                   </Tooltip>
                   ) : null}
-                </div>
+  </>);
+  return (
+    <>
+          {/* the panes, each drawn into its block's place, which the shell lays out among the page's panels
+              (shell/arrangement) with the seams between them */}
+          <>
+            <>
+              {layersShown ? (
+                <InBlock id="layers">
+                  <div ref={layersPaneRef} className={`${PANE} flex-1 bg-[var(--bg-panel)]`} data-workspace-layers>
+                    <LayersPanel
+                      ask={askStage}
+                      timeMs={timeMs}
+                      playing={playing}
+                      filmKey={layersKey}
+                      clipOf={layerClipOf}
+                      selected={layersSelected}
+                      selectedClipLocs={selectedLocs}
+                      captions={layerCaptions}
+                      onSelectRows={selectLayerRows}
+                      onPoint={setPointedLayer}
+                      onToggle={toggleLayerRow}
+                      onDelete={deleteLayerRow}
+                      onMenu={openLayerMenu}
+                      onRestack={restackLayers}
+                      onNotify={toast.show}
+                      width={layersShownWidth}
+                      onClose={() => { setPointedLayer(null); setLayersPaneOpen(false); }}
+                    />
+                  </div>
+                </InBlock>
+              ) : null}
+
+              <InBlock id="viewer">
+              <div className={`${PANE} min-w-0 flex-1 bg-[var(--bg-viewer)]`} data-viewer-pane="" inert={coverOpen}>
+                {!storyWorkspace&&<div className={PANE_BAR} data-viewer-utility-row="">{viewerUtilities}</div>}
                 <input ref={relinkInputRef} type="file" accept="video/*,image/*,audio/*" className="hidden"
                   onChange={(e) => {
                     const picked = e.target.files?.[0];
@@ -5521,7 +5585,7 @@ export function ProjectView({ projectId, onProject }: {
                     void onImport([picked], 'assets', () => {}).then(([landed]) => relinkBlock(block, landed ?? `assets/${picked.name}`), (err: Error) => toast.show(err.message));
                   }} />
                 {pickedMedia ? (
-                  <div className="absolute inset-x-0 bottom-0 top-8 z-20">
+                  <div className="absolute inset-x-0 bottom-0 z-20" style={{top:storyWorkspace?44:32}}>
                     {/* a bundle of Saved plays its page as its clip had it; any other bundle shows its picture */}
                     <SourcePreview file={pickedSaved && pickedMedia.bundle && !pickedMedia.bundle.page && !pickedMedia.bundle.file ? { ...pickedMedia, kind: 'image' } : pickedMedia} saved={pickedSaved} sources={pickedSaved ? savedSources : mediaSources} onClose={() => pickMedia(null)} onPlace={placeFromSource} />
                   </div>
@@ -5543,6 +5607,12 @@ export function ProjectView({ projectId, onProject }: {
                     browser's own text selection went with it over the film's video and frames and tinted them blue */}
                 <div className="relative flex min-h-0 flex-1 select-none items-center justify-center px-3 py-2.5" style={{ containerType: 'size' }} {...pictureDropProps}
                   data-viewer-picture="" data-viewer-focus={viewerFocus ? '1' : '0'}>
+                  {value && storyWorkspace &&
+                    <StoryPane projectId={projectId} film={value} outer={loaded.outer} focusedId={storyFocusedId} headerTools={viewerUtilities}
+                      range={markedRange} mediaBase={loaded.folder} projectName={loaded.project.name} onContentMode={onStoryDisplay}
+                      settle={async()=>{stageControl.current?.flushPending();await film.settled();}}
+                      selectedIds={selectedBlocks.flatMap(block => block.clipId ? [block.clipId] : [])} timeMs={timeMs} write={edit}
+                      onSelectClip={id => { setSelectedKeys(id ? [id] : []); setStoryFocusedId(id || null); }} />}
                   <div ref={setLibraryPreviewPicture} className="contents" />
                   {pictureDrop ? (
                     <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] ring-2 ring-inset ring-[var(--accent)]">
@@ -5877,6 +5947,16 @@ export function ProjectView({ projectId, onProject }: {
                   ) : (
                   <Timeline
                     blockMenuExtra={timelineMenuExtra}
+                    onAddStoryTrack={!loaded?.outer ? async name => {
+                      const at = value.tracks.findIndex(track => track.attrs?.['data-story-track'] === 'scene');
+                      return edit([{ op: 'story-track-add', id: crypto.randomUUID(), name, at: at < 0 ? 0 : at }], '新增故事线轨道');
+                    } : undefined}
+                    storyBeatIds={new Set(value.tracks.flatMap(track => track.clips.filter(clip => storyData(clip)?.kind === 'beat').map(clip => clip.id)))}
+                    onStoryLink={id => {
+                      const ops = storyLinkOps(value, id);
+                      if (ops.length) void edit(ops, '切换节拍场次关联');
+                      else toast.show('节拍起点处没有可关联的场次。');
+                    }}
                     chat={timelineChat}
                     {...(hostHover ? { onHoverBlock: hoverBlock } : {})}
                     /* the range (I / O, ⇧-drag on the ruler, Play range) is Studio's own; referring it is the app's */
@@ -5920,7 +6000,9 @@ export function ProjectView({ projectId, onProject }: {
                     onCompound={(blocks) => { void makeCompound(blocks).then((err) => { if (err) toast.showError(err); }); }}
                     onUncompound={(block) => { void breakCompound(block).then((err) => { if (err) toast.showError(err); }); }}
                     onEnterCompound={enterCompound}
-                    crumb={loaded?.outer ? { outer: loaded.outer.name, name: loaded.outer.folder, onBack: () => onProject(loaded.outer!.id) } : null}
+                    crumb={loaded?.outer ? { outer: loaded.outer.name, name: loaded.outer.folder, onBack: () => {
+                      if(storyWorkspace)window.dispatchEvent(new Event(STORY_LEAVE_SCENE));else onProject(loaded.outer!.id);
+                    } } : null}
                     cover={coverTile}
                     onEditBlocks={editBlocks}
                     onEditOps={editOps}

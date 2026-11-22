@@ -59,6 +59,9 @@ export interface MediaMade {
   again?: { verb: string; args: Record<string, string | true | string[]>; via: string; model?: string };
 }
 export type Op =
+  | { op: 'story-pack' }
+  | { op: 'story-track-add'; id: string; name: string; at: number; kind?: 'beat' | 'scene' }
+  | { op: 'story-track-remove'; id: string }
   | { op: 'set'; clip: string; field: string; value?: unknown }
   | { op: 'move'; clip: string; at: number; track?: number; newTrack?: number; newTrackAttrs?: Track['attrs'] }
   | { op: 'insert'; clip?: Partial<Clip> & { src: string }; from?: string; at?: number; after?: string; track?: number | { insert: number }; newTrack?: number; newTrackAttrs?: Track['attrs']; link?: string | null }

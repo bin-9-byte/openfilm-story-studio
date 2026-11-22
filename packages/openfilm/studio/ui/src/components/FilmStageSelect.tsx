@@ -3312,7 +3312,7 @@ function FilmStageSelectImpl({
     if (!area) return;
     const onDown = (e: PointerEvent) => {
       const el = e.target as Element | null;
-      if (e.button !== 0 || !el || host.current?.contains(el) || el.closest(CONTROLS)) return;
+      if (e.button !== 0 || !el || host.current?.contains(el) || el.closest(CONTROLS) || el.closest('[data-story-workspace]')) return;
       /* only the dark around the picture: what lies over the picture (the subtitles) has its own presses */
       const r = filmRect();
       if (r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) return;

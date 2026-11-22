@@ -17,7 +17,7 @@ const HIDDEN = { visibility: 'hidden', opacity: 0 } as const;
 const SLOT = 'relative flex min-h-0 min-w-0 flex-col';
 
 export function Arrangement({ frame }: { frame: ReturnType<typeof useProjectFrame> }) {
-  const { loaded, failure, arrangement, amongDrawn, places, blockBox, setBlockRoom, placeBlock, canvasOpen, noBench, away, surface, surfaceArrangement, among, drawnIn } = frame;
+  const { loaded, failure, arrangement, amongDrawn, places, blockBox, setBlockRoom, placeBlock, canvasOpen, noBench, away, surface, surfaceArrangement, among, drawnIn, timelineLibrarySpan } = frame;
   const drawing = React.useSyncExternalStore(drawingStore.subscribe, drawingStore.get);
   const { spec, layout, free } = arrangement;
   const colRef = React.useRef<HTMLElement | null>(null);
@@ -79,9 +79,11 @@ export function Arrangement({ frame }: { frame: ReturnType<typeof useProjectFram
     const top = tops.indexOf(block);
     return top >= 0 ? 2 * top : 2 * tops.length + 2 + 2 * bottoms.indexOf(block);
   };
+  const timelineSpan = (block: BlockSpec): React.CSSProperties => timelineLibrarySpan?.key === block.key
+    ? { marginLeft: -timelineLibrarySpan.left, marginRight: -timelineLibrarySpan.right } : {};
   const slot = (block: BlockSpec, style: React.CSSProperties, grow = false) => (
     <div key={block.key} ref={attachOf(block)} data-block={block.key} className={`${SLOT} ${grow ? 'flex-1' : 'shrink-0'}`}
-      style={{ ...style, ...blockBox(block.key) }} />
+      style={{ ...style, ...timelineSpan(block), ...blockBox(block.key) }} />
   );
   const seam = (block: BlockSpec) => {
     const drawn = amongDrawn[block.key]!;
@@ -95,7 +97,7 @@ export function Arrangement({ frame }: { frame: ReturnType<typeof useProjectFram
     }
     const top = edgeOf(block) === 'top';
     return <DockPaneDivider key={`${block.key}-seam`} height={drawn.size} onResize={resize} containerRef={colRef} label={drawn.seam.label} min={drawn.seam.min} minRest={drawn.seam.minRest}
-      edge={top ? 'top' : 'bottom'} style={{ order: top ? at + 1 : at - 1 }} />;
+      edge={top ? 'top' : 'bottom'} style={{ order: top ? at + 1 : at - 1, ...timelineSpan(block) }} />;
   };
   /* a block and its seam, the seam on the main block's side of it as they are drawn */
   const withSeam = (block: BlockSpec, style: React.CSSProperties) => (before(block) ? [slot(block, style), seam(block)] : [seam(block), slot(block, style)]);

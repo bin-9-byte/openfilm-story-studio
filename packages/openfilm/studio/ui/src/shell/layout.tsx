@@ -22,6 +22,7 @@ import { dockedSizes, type BlockRoom, type DrawnBlock } from '@/lib/workspace-pr
 import { centerOf, defaultWorkspace, workspaceChatWidth, workspaceGeometry, type ArrangementSpec, type BlockPlace, type BlockSpec, type WorkspaceLayout } from '@/lib/workspaces';
 import { ProjectLayoutMenu } from '@/components/ProjectLayoutMenu';
 import { WorkspaceEditor, WorkspaceSeams } from '@/components/WorkspaceEditor';
+import { DOCK_GAP } from '@/components/PaneDivider';
 import type { useProjectFrame } from './ProjectFrame';
 import { useSteady, useWiringsOf } from './frame';
 import { HOST_PANEL_TOP } from './library';
@@ -218,9 +219,23 @@ export function useLayout(of: { canvasOpen: boolean; noBench: boolean; among: st
      panel while the pane covers it. Open or not, the side it is docked on and its box, `free` when the panels float,
      how much of its foot the app's composer covers (`under`; `beside`, beside the way back to the chat), and that seam
      (null: none) */
+  // A side library belongs to the upper work area. The editing timeline and its
+  // resize seam span beneath it, using the same live height as the timeline slot.
+  const bottomTimeline = amongSpec.blocks.find((block) => block.owner === 'edit' && block.id === 'timeline'
+    && (amongPrefs.blocks[block.key]?.edge ?? block.edge) === 'bottom' && amongDrawn[block.key]?.shown);
+  const timelineLibrarySpan = useSame(!canvasOpen && !amongFree && independentLibrary && libraryOpen
+    && bottomTimeline && (dockGeometry.dock === 'left' || dockGeometry.dock === 'right') ? {
+      key: bottomTimeline.key,
+      left: dockGeometry.dock === 'left' ? dockGeometry.library.width + DOCK_GAP : 0,
+      right: dockGeometry.dock === 'right' ? dockGeometry.library.width + DOCK_GAP : 0,
+      height: amongDrawn[bottomTimeline.key]!.size + (amongDrawn[bottomTimeline.key]!.seam ? DOCK_GAP : 0),
+    } : null);
   const libraryPane = useSame({
     open: libraryOpen, dock: independentLibrary ? dockGeometry.dock : 'chat' as const,
-    rect: independentLibrary ? freeGeometry?.panels.library ?? dockGeometry.library : chatLibraryRect,
+    rect: independentLibrary ? freeGeometry?.panels.library ?? {
+      ...dockGeometry.library,
+      height: Math.max(0, dockGeometry.library.height - (timelineLibrarySpan?.height ?? 0)),
+    } : chatLibraryRect,
     free: Boolean(freeGeometry), under: !independentLibrary ? hostAssets?.bottom ?? 0 : 0, beside: !independentLibrary ? hostAssets?.beside ?? 0 : 0,
     seam: !freeGeometry && !independentLibrary && hostAssets?.open && hostPanel ? { label: hostPanel.label, width: hostPanel.width, bottom: hostAssets.bottom, side: workspacePrefs.chatSide } : null,
   });
@@ -235,7 +250,7 @@ export function useLayout(of: { canvasOpen: boolean; noBench: boolean; among: st
     workspaceMode, workspacePrefs, shownSpec, workspaceLayout: useSame(workspaceLayout), workspaceViewport, workspaceStorageFailed,
     layoutDraft: rearranged, layoutEditing, updateWorkspace, placeBlock, openBlock, previewSizes,
     amongFree, canvasFree, freeGeometry, amongDock, canvasDock, places, blockBox, arrangement, amongDrawn, setBlockRoom, drawnIn,
-    chat, chatThere, libraryPane,
+    chat, chatThere, libraryPane, timelineLibrarySpan,
     applyWorkspace: does.applyWorkspace, resetWorkspace: does.resetWorkspace, beginLayoutEdit: does.beginLayoutEdit,
     cancelLayoutEdit: does.cancelLayoutEdit, finishLayoutEdit: does.finishLayoutEdit, resetLayoutEdit: does.resetLayoutEdit, openLibrary: does.openLibrary, setPanelWidth: does.setPanelWidth,
   };

@@ -1,0 +1,46 @@
+.story-overview { flex:1; min-height:0; overflow:auto; padding:18px 22px 40px; color:var(--text); scroll-padding-top:12px; }
+.story-overview-head { border-bottom:1px solid var(--line); padding-bottom:16px; margin-bottom:22px; display:flex; gap:12px; flex-wrap:wrap; align-items:start; }
+.story-overview h2 { font-size:18px; font-weight:600; }
+.story-overview h3 { font-size:15px; font-weight:600; }
+.story-overview-head p,.story-overview-hint,.story-reading-time { font-size:11px; color:var(--text-muted); line-height:1.7; }
+.story-overview-head .story-actions { margin-left:auto; }
+.story-overview button { border-radius:5px; background:var(--bg-field); padding:7px 10px; font-size:12px; text-align:left; }
+.story-overview button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.story-overview .story-overview-location { flex-basis:100%; color:var(--accent); }
+.story-overview-section-title { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:8px; }
+.story-overview-section-title label { font-size:12px; color:var(--text-muted); }
+.story-overview select { padding:6px; margin-left:8px; background:var(--bg-field); border:1px solid var(--line); border-radius:5px; }
+.story-reading-group { display:grid; grid-template-columns:52px minmax(0,1fr); gap:10px; margin:18px 0; }
+.story-reading-time { padding-top:13px; font-variant-numeric:tabular-nums; }
+.story-reading-parallel { display:flex; flex-wrap:wrap; gap:10px; }
+.story-reading-parallel article { flex:1 1 260px; min-width:0; border:1px solid var(--line); border-radius:6px; background:var(--bg-panel); }
+.story-overview .story-reading-content { display:grid; gap:9px; width:100%; background:transparent; padding:14px; }
+.story-reading-line { font-size:11px; color:var(--accent); }
+.story-reading-content strong { font-size:15px; }
+.story-overview-body { display:block; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.85; font-size:13px; }
+.story-overview .story-overview-edit { margin:5px 12px 12px; font-size:11px; color:var(--accent); }
+.story-boards { margin-top:32px; border-top:1px solid var(--line); padding-top:22px; }
+.story-overview-scene { border:1px solid var(--line); border-radius:7px; padding:16px; margin-top:16px; }
+.story-overview-scene > header { display:flex; gap:12px; justify-content:space-between; margin-bottom:12px; }
+.story-overview-scene > header p,.story-overview-scene > header span { font-size:11px; color:var(--text-muted); line-height:1.8; }
+.story-overview-scene .story-actions { align-items:start; }
+.story-overview-sources { display:flex; flex-wrap:wrap; gap:7px; align-items:center; font-size:11px; margin:12px 0; }
+.story-overview .story-overview-sources button { font-size:11px; }
+.story-overview-empty { color:var(--text-muted); padding:14px 0; font-size:12px; }
+.story-overview-shots { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr)); gap:12px; }
+.story-overview-shots > section { min-width:0; border:1px solid var(--line); border-radius:6px; overflow:hidden; }
+.story-overview .story-overview-shot-content { padding:0 0 10px; display:grid; gap:8px; width:100%; background:transparent; }
+.story-overview-shot-content img { width:100%; aspect-ratio:16/9; object-fit:contain; background:#101114; }
+.story-overview-no-image { aspect-ratio:16/9; display:grid; place-items:center; background:var(--bg-field); color:var(--text-muted); }
+.story-overview-shot-content > span { padding:0 10px; }
+.story-overview-shot-number { font-weight:600; }
+.story-overview-shot-beats { font-size:11px; line-height:1.7; margin:0 10px 8px; color:var(--accent); overflow-wrap:anywhere; }
+.story-overview-shots details { margin:8px 10px; font-size:11px; }
+.story-overview-shots details summary { cursor:pointer; color:var(--text-muted); }
+.story-overview .is-located { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
+.story-overview .story-legacy-content { background:transparent; padding:12px 0; width:100%; }
+@media(max-width:700px) { .story-overview{padding:12px;} .story-reading-group{grid-template-columns:1fr;gap:3px;} .story-overview-scene>header{flex-wrap:wrap;} }
+.story-overview { scroll-padding-top:120px; }
+.story-overview-head { position:sticky; top:0; z-index:4; background:var(--bg-panel); padding-top:8px; }
+.story-overview-head { top:-18px; }
+@media(max-width:700px) { .story-overview-head{top:-12px;} }

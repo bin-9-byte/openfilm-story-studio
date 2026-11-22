@@ -346,6 +346,7 @@ export type TimelineBlockKind = 'mg' | 'video' | 'voice' | 'sfx' | 'music' | 'ca
 
 export interface TimelineBlock {
   id: string;
+  storyIndependent?: boolean;
   title: string;
   generation?: 'running' | 'failed';
   /** The library's text (isLibraryText): the words it says, as its overrides set them; absent when they are its own. */
@@ -427,6 +428,7 @@ export interface TimelineBlock {
 
 export interface TimelineTrack {
   lane: string;
+  storyKind?: 'scene' | 'beat' | 'shot';
   /** The film.html track's kind (mg / video / audio). */
   role: FilmLaneRole;
   /** Which row of the same track (overlapping clips spread into extra rows). */

@@ -7,6 +7,7 @@
 import * as React from 'react';
 import { api, ApiError, projectEvents, type Listing, type ProjectFilm } from '@/api';
 import { leaveProject } from '@/lib/navigate';
+import { takeProjectHandoff } from '@/lib/project-handoff';
 
 export function useProjectRead(projectId: string) {
   /* how many times the project's files changed since it opened (see the folder's events below) */
@@ -37,7 +38,8 @@ export function useProjectRead(projectId: string) {
     let live = true;
     const first = filmReads.current;
     /* a project the list no longer has (deleted meanwhile, a tab of it opened again): gone, so this page leaves it */
-    api.film(projectId, AbortSignal.timeout(8000)).then((l) => {
+    const handoff = takeProjectHandoff(projectId);
+    (handoff ? Promise.resolve(handoff) : api.film(projectId, AbortSignal.timeout(8000))).then((l) => {
       if (!live || first !== filmReads.current) return;
       setLoaded(l); setFirstRead(l);
     }, (e: Error) => {

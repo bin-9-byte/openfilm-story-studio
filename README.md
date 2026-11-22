@@ -1,3 +1,15 @@
+# OpenFilm Story Studio · 剧本导演工作台
+
+A local-first screenplay and storyboard workbench built on [OpenFilm](https://github.com/openfilm/openfilm), with independent story tracks, scene breakdowns, editable storyboard tables, and the original editing timeline and undo history.
+
+本仓库是基于 OpenFilm 0.4.1 的剧本导演工作台改造版。先写剧本线与节拍，再划分场次并设计分镜；支持全片串读、跨场定位和场内镜头往返。工程与素材保存在本机，安装依赖后可断网使用本机网页服务。
+
+**[启动与使用说明](STORY-WORKBENCH.md)** · [交互设计](docs/story-first-interaction.md) · [页面设计与验证](docs/workbench-design.md) · [待办](TODO.md)
+
+保留上游 MIT 许可证及原始说明。以下为 OpenFilm 原版介绍。
+
+---
+
 <p align="center">
   <img src="docs/logo-light.svg#gh-light-mode-only" alt="OpenFilm" height="48">
   <img src="docs/logo-dark.svg#gh-dark-mode-only" alt="OpenFilm" height="48">

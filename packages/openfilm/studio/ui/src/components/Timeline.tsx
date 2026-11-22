@@ -682,6 +682,9 @@ export interface TimelineProps {
   onAddCaption?: (src: string, atMs: number) => Promise<string | null>;
   /** Clip id → its `data-link`: clips sharing one are selected and edited together (see the Linked switch). */
   links?: ReadonlyMap<string, string>;
+  storyBeatIds?: ReadonlySet<string>;
+  onStoryLink?: (id: string) => void;
+  onAddStoryTrack?: (name: string) => Promise<string | null>;
   /**
    * Filled with the timeline's commands, for keys bound outside it (Q / W, N…): each acts as its menu entry or switch
    * does, on the selection or the clips under the playhead.
@@ -1051,6 +1054,9 @@ export const Timeline = React.memo(function Timeline({
   onEditOps,
   onAddCaption,
   links,
+  storyBeatIds,
+  onStoryLink,
+  onAddStoryTrack,
   commandsRef,
   onSplit,
   onDetachAudio,
@@ -2049,7 +2055,11 @@ export const Timeline = React.memo(function Timeline({
     if (targetLane && !tracks.some((tr) => tr.lane === targetLane)) setTargetLane(null);
   }, [tracks, targetLane]);
   const [headsCollapsed, setHeadsCollapsed] = React.useState(false);
-  const editHeadW = emptyEdit ? EMPTY_HEAD_W : headsCollapsed ? COLLAPSED_HEAD_W : HEAD_W + (solo ? HEAD_SOLO_W : 0);
+  const [addingStoryTrack, setAddingStoryTrack] = React.useState(false);
+  const [storyTrackError, setStoryTrackError] = React.useState('');
+  const [storyTrackSaving, setStoryTrackSaving] = React.useState(false);
+  const storyHeads = tracks.some(track => track.storyKind);
+  const editHeadW = emptyEdit ? EMPTY_HEAD_W : headsCollapsed ? COLLAPSED_HEAD_W : (storyHeads ? 210 : HEAD_W) + (solo ? HEAD_SOLO_W : 0);
   const headW = layers?.headWidth ?? editHeadW;
   /* picking clips lets the gap go; so does an edit that fills or moves it */
   React.useEffect(() => { if (selected.length) setGap(null); }, [selected.length]);
@@ -3116,7 +3126,9 @@ export const Timeline = React.memo(function Timeline({
           marginTop: GAP,
           height: h,
           /* what the row holds on the left, a label; its switches after it, each in its own column */
-          gridTemplateColumns: headsCollapsed ? 'minmax(0, 1fr)' : `24px 4px repeat(${solo ? 4 : 3}, minmax(0, 1fr))`,
+          gridTemplateColumns: headsCollapsed ? 'minmax(0, 1fr)' : track.storyKind
+            ? `minmax(0, 1fr) 4px repeat(${solo ? 4 : 3}, 24px)`
+            : `24px 4px repeat(${solo ? 4 : 3}, minmax(0, 1fr))`,
           background: TL.trackHead,
           boxShadow: chatLit ? CHAT_RING : undefined,
           opacity: liftingHead ? 0.45 : 1,
@@ -3137,9 +3149,17 @@ export const Timeline = React.memo(function Timeline({
             <Ellipsis size={15} />
           </button>
         ) : <>
-        <span className="flex min-w-0 items-center gap-1">
+        <span className="flex min-w-0 w-full items-center gap-1 px-1" title={track.name ?? undefined}>
           {/* its name as editors number tracks: no title of its own */}
-          <LaneMark track={track} />
+          {track.storyKind
+            ? <span className="grid min-w-0 gap-1 text-[11px] font-medium" style={{ color: track.storyKind === 'scene' ? '#94cce4' : track.storyKind === 'shot' ? '#d8c293' : '#c7b4e6' }}>
+                <span className="truncate">{track.name ?? (track.storyKind === 'scene' ? '场次划分' : track.storyKind === 'shot' ? '场内镜头' : '故事线')}</span>
+                <small className="truncate text-[9px] font-normal text-[var(--text-muted)]">
+                  {track.storyKind === 'scene' ? '引用剧本 · 包含分镜' : track.storyKind === 'shot' ? '本场镜头'
+                    : track.index > 1 ? `同一故事线 · 重叠显示 ${track.index}` : '故事节拍'}
+                </small>
+              </span>
+            : <LaneMark track={track} />}
         </span>
         <span aria-hidden />
         {onEditBlocks || onEditOps ? <>
@@ -3693,6 +3713,15 @@ export const Timeline = React.memo(function Timeline({
                   {/* pinned to the left of the view so a clip wider than the screen still says what it is (pinLabels,
                       on scroll: scrolling rebuilds nothing) */}
                   <span className="flex min-w-0 origin-left items-center gap-1" data-pin={left} data-pin-max={width - 48} data-zoom-keep="">
+                    {block.clipId && storyBeatIds?.has(block.clipId) && <button
+                      type="button" aria-label={`场次关联 · ${block.title}`} aria-pressed={Boolean(links?.has(block.clipId))}
+                      title={links?.has(block.clipId) ? '跟随场次，点击解除关联' : '独立节拍，点击关联起点所在场次'}
+                      disabled={track.locked}
+                      className="pointer-events-auto flex shrink-0 items-center rounded px-0.5 text-white/80 hover:bg-black/30"
+                      onPointerDown={event => event.stopPropagation()}
+                      onClick={event => { event.stopPropagation(); onStoryLink?.(block.clipId!); }}>
+                      {links?.has(block.clipId) ? <Lock size={11} /> : <LockOpen size={11} />}
+                    </button>}
                     {compound && width > 14 ? (
                       <span data-clip-compound="" role="img" aria-label={t('timeline.compoundClip')} className="flex shrink-0 items-center gap-0.5 text-white/90">
                         <Layers size={12} />
@@ -4537,11 +4566,36 @@ export const Timeline = React.memo(function Timeline({
       }}
     >
       {/* ── Toolbar: mode (select / split) · undo / redo / history · split · status · the switches · zoom · subtitles ── */}
+      {addingStoryTrack && <form role="dialog" aria-label="新增故事线轨道"
+        className="absolute left-2 top-10 z-50 grid gap-3 rounded-lg border border-[var(--line)] bg-[var(--bg-raised)] p-4 text-[12px] shadow-xl"
+        onKeyDown={event => { event.stopPropagation(); if (event.key === 'Escape') setAddingStoryTrack(false); }}
+        onSubmit={async event => {
+          event.preventDefault();
+          const name = String(new FormData(event.currentTarget).get('name') ?? '').trim();
+          if (!name || !onAddStoryTrack) return;
+          setStoryTrackSaving(true);
+          try {
+            const error = await onAddStoryTrack(name);
+            setStoryTrackError(error ?? '');
+            if (!error) setAddingStoryTrack(false);
+          } catch (reason) { setStoryTrackError(reason instanceof Error ? reason.message : String(reason)); }
+          finally { setStoryTrackSaving(false); }
+        }}>
+        <label className="grid gap-2">轨道名称<input name="name" required autoFocus maxLength={80}
+          className="rounded border border-[var(--line)] bg-[var(--bg-field)] px-2 py-1.5" placeholder="例如 C 线 · 身份之谜" /></label>
+        {storyTrackError && <p role="alert">{storyTrackError}</p>}
+        <div className="flex gap-2">
+          <button type="submit" disabled={storyTrackSaving} className="rounded bg-[var(--primary)] px-3 py-1.5 text-[var(--on-primary)]">添加轨道</button>
+          <button type="button" disabled={storyTrackSaving} onClick={() => setAddingStoryTrack(false)}>取消</button>
+        </div>
+      </form>}
       <div
         ref={toolbarRef}
         className="@container relative flex h-[34px] shrink-0 items-center gap-1.5 border-b px-2"
         style={{ background: TL.head, borderColor: TL.line }}
       >
+        {onAddStoryTrack && <button type="button" className="flex shrink-0 items-center gap-1 rounded px-2 py-1 text-[11px] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
+          aria-expanded={addingStoryTrack} onClick={() => { setStoryTrackError(''); setAddingStoryTrack(value => !value); }}><Plus size={13} />新增故事线轨道</button>}
         {onSplit && !layers ? <>
           <ModePicker mode={mode} onPick={setMode} />
           <span className="mx-0.5 h-4 w-px" style={{ background: TL.toolbarDivider }} />

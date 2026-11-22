@@ -24,6 +24,7 @@ import type { Clip, Op, PropEdit, PropValue } from '../api.ts';
 import type { TimelineTrack } from './timeline-layout';
 import { MIN_BLOCK_MS, newTrackSide } from './timeline-drag.ts';
 import { frameMs } from './timecode.ts';
+import { sequenceRanges } from '../../../../src/story-sequence.mjs';
 
 /** Clips closer than this are touching: film.html rounds each time alone, to the millisecond. */
 export const TOUCH_MS = 1;
@@ -33,6 +34,7 @@ const PIECE_MIN_MS = frameMs(1);
 
 /** A clip as an edit sees it. */
 export interface EditClip {
+  storyIndependent?: boolean;
   /** Its id in film.html. */
   id: string;
   startMs: number;
@@ -57,6 +59,7 @@ export interface EditClip {
 }
 
 export interface EditTrack {
+  storySequential?: boolean;
   /** Its place in film.html; below 0 for a track an edit opens (see openTrack). */
   index: number;
   /** A track an edit opens: what it was opened for. */
@@ -79,8 +82,8 @@ export interface Switches { magnet: boolean; linkage: boolean }
 export const NO_SWITCHES: Switches = { magnet: false, linkage: false };
 
 /** The main picture track (V1): caption rows keep their cues and never take the main track's magnet. */
-export function mainTrackOf(model: readonly Pick<EditTrack, 'index' | 'role' | 'captions'>[]): number | null {
-  const pictures = model.filter((t) => t.index >= 0 && t.role !== 'audio' && !t.captions);
+export function mainTrackOf(model: readonly Pick<EditTrack, 'index' | 'role' | 'captions' | 'storySequential'>[]): number | null {
+  const pictures = model.filter((t) => t.index >= 0 && t.role !== 'audio' && !t.captions && !t.storySequential);
   return pictures.length ? Math.max(...pictures.map((t) => t.index)) : null;
 }
 
@@ -133,7 +136,7 @@ export function editModelOf(tracks: readonly TimelineTrack[], links?: ReadonlyMa
     if (row.docIndex == null) continue;
     let track = byIndex.get(row.docIndex);
     if (!track) {
-      track = { index: row.docIndex, role: row.role, clips: [], ...(row.locked ? { locked: true } : {}), ...(row.captions ? { captions: true } : {}) };
+      track = { index: row.docIndex, role: row.role, clips: [], ...(row.storyKind === 'beat' ? { storySequential: true } : {}), ...(row.locked ? { locked: true } : {}), ...(row.captions ? { captions: true } : {}) };
       byIndex.set(row.docIndex, track);
     }
     if (row.locked) track.locked = true;
@@ -141,7 +144,7 @@ export function editModelOf(tracks: readonly TimelineTrack[], links?: ReadonlyMa
       /* a cue is no clip of film.html (it has no place there) but is edited as one */
       if (!b.clipId || (!b.loc && !b.cue)) continue;
       const speed = b.speed && b.speed > 0 ? b.speed : 1;
-      const still = Boolean(b.anchor?.still || b.cue);
+      const still = row.storyKind === 'beat' || Boolean(b.anchor?.still || b.cue);
       const inMs = b.inMs ?? Math.round((b.anchor?.trimFrom ?? 0) * 1000);
       const srcEnd = inMs + (b.endMs - b.startMs) * speed;
       const sourceMs = still ? Infinity
@@ -152,6 +155,7 @@ export function editModelOf(tracks: readonly TimelineTrack[], links?: ReadonlyMa
         id: b.clipId, startMs: b.startMs, endMs: b.endMs, inMs, speed, sourceMs,
         ...(still ? { still: true } : {}),
         ...(link ? { link } : {}),
+        ...(b.storyIndependent ? { storyIndependent: true } : {}),
         ...(b.cue ? { cue: true } : {}),
       });
     }
@@ -459,7 +463,7 @@ function ridesOf(model: EditModel, main: number | null, skip: ReadonlySet<string
   for (const track of model) {
     if (track === mainTrack || track.locked) continue;
     for (const clip of track.clips) {
-      if (skip.has(clip.id) || !ridesOn(mainTrack, clip)) continue;
+      if (clip.storyIndependent || skip.has(clip.id) || !ridesOn(mainTrack, clip)) continue;
       const host = hostOf(mainTrack, clip)!;
       out.set(clip.id, { host: host.id, at: momentAt(host, clip.startMs) });
     }
@@ -507,7 +511,7 @@ function settle(d: Draft, moved: ReadonlySet<EditClip>): void {
   const main = mainTrackOf(d.tracks);
   for (const t of [...d.tracks]) {
     /* a cue carried over another stays: its file cuts the other short */
-    if (t.index < 0 || t.locked || t.index === main || t.captions) continue;
+    if (t.index < 0 || t.locked || t.index === main || t.captions || t.storySequential) continue;
     const kept: EditClip[] = [];
     for (const c of [...t.clips].sort((a, b) => a.startMs - b.startMs)) {
       const hits = kept.filter((k) => overlap(k, c));
@@ -562,6 +566,19 @@ function changedFields(was: EditClip, now: EditClip): Record<string, PropValue> 
 }
 
 function planOf(d: Draft): EditPlan {
+  for (const track of d.tracks) {
+    if (!track.storySequential || track.locked) continue;
+    const priorities = new Set(track.clips.filter(clip => {
+      const old = d.before.get(clip.id);
+      return !old || old.track !== track.index || old.clip.startMs !== clip.startMs || old.clip.endMs !== clip.endMs;
+    }).map(clip => clip.id));
+    const positions = sequenceRanges(track.clips, priorities);
+    for (const clip of track.clips) {
+      const placement = positions.get(clip.id);
+      if (placement) { clip.startMs = placement.startMs; clip.endMs = placement.endMs; }
+    }
+    track.clips.sort((a, b) => a.startMs - b.startMs);
+  }
   relinkCuts(d);
   const ops: Op[] = [];
   const edits: { clip: string; prop: string; value: PropValue }[] = [];
@@ -942,6 +959,10 @@ export function planMove(model: EditModel, spec: MoveSpec): (EditPlan & { landMs
   const lead = ids[0];
   if (!lead) return null;
   const hand = new Set(ids);
+  const sequentialDest = spec.to?.get(lead) ?? d.before.get(lead)!.track;
+  if (typeof sequentialDest === 'number' && trackAt(d, sequentialDest)?.storySequential) {
+    spec = { ...spec, mode: 'place', replaceId: undefined, insertAtMs: undefined };
+  }
   const replacing = spec.replaceId != null ? d.before.get(spec.replaceId) : undefined;
   const destOf = (id: string): TrackDest => spec.to?.get(id) ?? d.before.get(id)!.track;
   for (const id of ids) {
@@ -1044,7 +1065,7 @@ export function planMove(model: EditModel, spec: MoveSpec): (EditPlan & { landMs
   if (spec.mode === 'place') {
     for (const [id, c] of lifted) {
       const dest = destOf(id);
-      if (typeof dest !== 'number' || inserted.has(id) || c.cue) continue;
+      if (typeof dest !== 'number' || inserted.has(id) || c.cue || trackAt(d, dest)?.storySequential) continue;
       if ((trackAt(d, dest)?.clips ?? []).some((x) => overlap(x, c))) taken.add(dest);
     }
   }
@@ -1063,7 +1084,7 @@ export function planMove(model: EditModel, spec: MoveSpec): (EditPlan & { landMs
       continue;
     }
     const track = trackAt(d, dest)!;
-    if (spec.mode === 'overwrite' && !inserted.has(id)) {
+    if (spec.mode === 'overwrite' && !inserted.has(id) && !track.storySequential) {
       clearLinked(d, [dest], c.startMs, c.endMs, hand);
       clearRange(d, track, c.startMs, c.endMs, hand);
     }
@@ -1087,7 +1108,7 @@ export interface EdgeMove { id: string; kind: EdgeKind }
 function rangeOf(track: EditTrack, c: EditClip, kind: EdgeKind, moving: ReadonlySet<string>): [number, number] {
   let lo = -Infinity;
   let hi = Infinity;
-  const others = track.clips.filter((x) => x !== c);
+  const others = track.storySequential ? [] : track.clips.filter((x) => x !== c);
   const prev = others.filter((x) => x.endMs <= c.startMs + TOUCH_MS).sort((a, b) => b.endMs - a.endMs)[0];
   const next = others.filter((x) => x.startMs >= c.endMs - TOUCH_MS).sort((a, b) => a.startMs - b.startMs)[0];
   const fenceStart = prev && !moving.has(`${prev.id}:end`) ? prev.endMs - c.startMs : -c.startMs;

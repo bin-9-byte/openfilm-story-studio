@@ -7,6 +7,7 @@
 import { FILM_FILE, clipFade, clipIdFor, clipKind, clipSpeed, kindOf } from '../../src/film-doc.mjs';
 import { KEYED_PROPS, animationsOf, motionName, readMotion, shiftMotion, withAnimations, writeMotion } from '../../src/clip-motion.mjs';
 import { plainTrack } from './track-layout.mjs';
+import { packStoryTracks } from '../../src/story-sequence.mjs';
 
 /** @typedef {{ src: string, id: string, [field: string]: unknown }} Clip */
 /** @typedef {{ src: string, kind?: 'captions' | 'subtitles', srclang?: string, label?: string }} TrackCaptions */
@@ -14,6 +15,9 @@ import { plainTrack } from './track-layout.mjs';
 /** @typedef {{ stage?: { w: number, h: number }, tracks: Track[], keyframes?: Record<string, string> }} FilmValue */
 /**
  * @typedef {(
+ *   | { op: 'story-pack' }
+ *   | { op: 'story-track-add', id: string, name: string, at: number, kind?: 'beat' | 'scene' }
+ *   | { op: 'story-track-remove', id: string }
  *   | { op: 'set', clip: string, field: string, value?: unknown }
  *   | { op: 'move', clip: string, at: number, track?: number, newTrack?: number, newTrackAttrs?: Track['attrs'] }
  *   | { op: 'insert', clip?: Partial<Clip> & { src: string }, from?: string, at?: number, after?: string, track?: number | { insert: number }, newTrack?: number, newTrackAttrs?: Track['attrs'], link?: string | null }
@@ -74,7 +78,9 @@ function targetTrack(/** @type {FilmValue} */ value, /** @type {number | undefin
 
 /** Tracks left with no clips go: a track is its clips (the agent never sees an empty one appear out of an edit). A
  * caption track has none and stays (SPEC §1 Captions). */
-const dropEmptyTracks = (/** @type {FilmValue} */ value) => { value.tracks = value.tracks.filter((track) => track.clips.length || track.captions); };
+const dropEmptyTracks = (/** @type {FilmValue} */ value) => {
+  value.tracks = value.tracks.filter((track) => track.clips.length || track.captions || track.attrs?.['data-story-track']);
+};
 
 /** Rearrange one run of ordinary tracks, keeping every clip and all of its fields.
  * @param {FilmValue} value @param {Extract<Op, { op: 'track-layout' }>} op
@@ -103,8 +109,12 @@ export function applyOps(value, ops) {
   if (!Array.isArray(ops) || !ops.length) throw new EditError('an edit needs at least one operation', 'invalid');
   /* a film that had no keyframes keeps none said when the edit leaves it none (an empty set says: take them away) */
   const hadKeyframes = value.keyframes !== undefined;
+  const beforeStory = value.tracks.some(track => track.attrs?.['data-story-track'] === 'beat') ? structuredClone(value) : undefined;
   for (const op of ops) {
     switch (op.op) {
+      case 'story-pack':
+        packStoryTracks(/** @type {any} */ (value));
+        break;
       case 'set': {
         if (!SETTABLE.has(op.field)) throw new EditError(`Studio does not set "${op.field}" on a clip`, 'invalid');
         const { clip } = find(value, op.clip);
@@ -207,6 +217,25 @@ export function applyOps(value, ops) {
         else delete track[op.field];
         break;
       }
+      case 'story-track-add': {
+        if (typeof op.id !== 'string' || !op.id || typeof op.name !== 'string' || !op.name.trim() ||
+            !Number.isInteger(op.at) || op.at < 0 || op.at > value.tracks.length ||
+            value.tracks.some(track => track.attrs?.['data-story-track-id'] === op.id)) {
+          throw new EditError('Story track needs a unique id, name and valid position', 'invalid');
+        }
+        value.tracks.splice(op.at, 0, { clips: [], attrs: {
+          title: op.name.trim(), 'data-story-track': op.kind === 'scene' ? 'scene' : 'beat', 'data-story-track-id': op.id,
+        } });
+        break;
+      }
+      case 'story-track-remove': {
+        const at = value.tracks.findIndex(track => track.attrs?.['data-story-track-id'] === op.id);
+        if (at < 0 || value.tracks[at].locked || value.tracks[at].clips.length) {
+          throw new EditError('Only an unlocked empty story track can be removed', 'invalid');
+        }
+        value.tracks.splice(at, 1);
+        break;
+      }
       case 'track-layout':
         applyTrackLayout(value, op);
         break;
@@ -275,6 +304,7 @@ export function applyOps(value, ops) {
   if (ops.every((op) => op.op === 'track-layout')) return value;
   /* After the whole edit, so every operation in it names tracks as the ones before it left them. */
   dropEmptyTracks(value);
+  if (beforeStory) packStoryTracks(/** @type {any} */ (value), /** @type {any} */ (beforeStory));
   fitFades(value);
   fitClipLengths(value);
   ownMotion(value);

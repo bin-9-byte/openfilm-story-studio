@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { applyOps, EditError } from '../../../server/ops.mjs';
 import { filmHead } from '../../../../src/film-doc.mjs';
 import { api, ApiError, projectEvents, type Film, type Op, type ProjectFilm } from '../api';
+import { createHistorySessions } from './history-session';
 import { inverse } from './undo';
 import { dropStep, inTurn, moveStep, nextStep, pushStep, type Steps } from './steps';
 
@@ -30,6 +31,7 @@ type FilmCandidate = FilmState & { head?: string; before: FilmState | null };
  */
 export type Step = { undo: Op[]; redo: Op[]; label: string; at: number; outside?: OutsideStep };
 export type OutsideStep = { undo: () => Promise<string | null>; redo: () => Promise<string | null> };
+const historySessions=createHistorySessions<Step>();
 
 /**
  * The film of a project, editable. With `presentOnDraw` the workbench calls `present` once the candidate has drawn.
@@ -47,14 +49,15 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
   const brokenRev = useRef<string | null>(null);
   /** edits applied here and not yet written */
   const pending = useRef(0);
-  const [steps, setStepsState] = useState<Steps<Step>>({ done: [], undone: [] });
+  const [steps, setStepsState] = useState<Steps<Step>>(()=>historySessions.get(projectId));
   /* the steps as they are now, ahead of the render: an undo pressed right after an edit (a nudge written the moment
      before it) undoes that edit, not the one before */
   const stepsRef = useRef(steps);
   const setSteps = useCallback((next: (s: Steps<Step>) => Steps<Step>) => {
     stepsRef.current = next(stepsRef.current);
+    historySessions.set(projectId,stepsRef.current);
     setStepsState(stepsRef.current);
-  }, []);
+  }, [projectId]);
   const ref = useRef(state);
   const queue = useRef(Promise.resolve());
   const savedRevision = useCallback(async () => {

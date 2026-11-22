@@ -86,7 +86,7 @@ function dropLanesOf(lanes: readonly TimelineTrack[], except: readonly string[])
     ...(lane.locked ? { locked: true } : {}),
     ...(lane.role === 'audio' ? { sound: true } : {}),
     ...(lane.captions ? { captions: true } : {}),
-    occupied: lane.docIndex == null ? [] : occupied.get(lane.docIndex) ?? [],
+    occupied: lane.docIndex == null || lane.storyKind === 'beat' ? [] : occupied.get(lane.docIndex) ?? [],
   }));
 }
 
@@ -341,7 +341,7 @@ export function useBlockDrag(opts: {
     const groupLanes = crowd.length ? dropLanesOf(lanes, [block.id, ...crowd.map((b) => b.id)]) : singleLanes;
     const snapCache = new Map<string, SnapTarget[]>();
     /* a trim stops at the neighbors on the clip's own track (every row of it) */
-    const fence = edgeMode === 'trim-start' || edgeMode === 'trim-end' ? trimFence(geom, singleLanes[homeLaneIndex]?.occupied ?? []) : undefined;
+    const fence = homeLane?.storyKind !== 'beat' && (edgeMode === 'trim-start' || edgeMode === 'trim-end') ? trimFence(geom, singleLanes[homeLaneIndex]?.occupied ?? []) : undefined;
     /* on the main track with the magnet a trim ripples: what follows moves with the edge */
     const ripple = magnetOn(model, homeLane?.docIndex, prefs.magnet) && (edgeMode === 'trim-start' || edgeMode === 'trim-end');
 
@@ -439,7 +439,7 @@ export function useBlockDrag(opts: {
       if (mode !== 'move') {
         /* a trim: the clips stay on their rows; the plan says where every edge lands. Rippling (the main track with the
            magnet), the neighbor is no fence: it moves along */
-        const out = applyDrag(geom, edgeMode, deltaMs, targets, pxPerMs, block.room, undefined, ripple ? undefined : fence);
+        const out = applyDrag(geom, edgeMode, deltaMs, targets, pxPerMs, homeLane?.storyKind === 'beat' ? undefined : block.room, undefined, ripple ? undefined : fence);
         const edge = mode === 'trim-end' ? 'end' : 'start';
         const want = edge === 'end' ? out.endMs - geom.endMs : out.startMs - geom.startMs;
         const plan = ripple
@@ -490,7 +490,7 @@ export function useBlockDrag(opts: {
       const doc = hoverRow?.docIndex;
       const opensAt = band !== 'body' && doc != null && !copy && !beforeStart && !homeLane?.captions && !crowd.some((b) => b.cue)
         ? doc + (band === 'below' ? 1 : 0) : null;
-      const onTrack = hovered && band === 'body' && !grouped && doc != null && !hoverRow?.captions
+      const onTrack = hovered && band === 'body' && !grouped && doc != null && !hoverRow?.captions && hoverRow?.storyKind !== 'beat'
         && (hoverRow?.role === 'audio') === isSound(block);
       const insertAtMs = onTrack && hovered.zone !== 'replace'
         ? hovered.zone === 'before' ? hovered.block.startMs : hovered.block.endMs : undefined;
@@ -535,7 +535,7 @@ export function useBlockDrag(opts: {
       /* onto the main track with the magnet it goes in between: the insert point decides, not a snap */
       const landsOn = groupOpens != null ? null : drop.action === 'move' ? drop.trackIndex : drop.action === 'stay' ? homeLane?.docIndex : null;
       const mainInsert = !grouped && magnetOn(m, landsOn, p.magnet);
-      const settle = editMode === 'place' && !mainInsert && !explicit ? flush : null;
+      const settle = editMode === 'place' && !mainInsert && !explicit && !m.find(track => track.index === landsOn)?.storySequential ? flush : null;
       const to = new Map<string, TrackDest>();
       if (drop.action === 'move') to.set(block.clipId!, drop.trackIndex);
       if (drop.action === 'insert') to.set(block.clipId!, { insert: drop.at });

@@ -581,6 +581,37 @@ const filmWithMain = () => model(
   { role: 'audio', clips: [['sfx', 5, 6]] },
 );
 
+test('story beats move to an exact time and push colliding neighbours on the same track', () => {
+  const m = model(
+    { role: 'mg', clips: [['a', 0, 4, { still: true }], ['b', 4, 8, { still: true }], ['c', 12, 16, { still: true }]] },
+    { role: 'video', clips: [['scene', 0, 20]] },
+  );
+  m[0]!.storySequential = true;
+  const plan = planMove(m, { ids: ['a'], deltaMs: 5000, pointerMs: 5000, mode: 'place' });
+  assert.ok(plan);
+  assert.deepEqual(after(m, plan), [[['a', 5, 9], ['b', 9, 13], ['c', 13, 17]], [['scene', 0, 20]]]);
+  assert.ok([...plan.placed.values()].every(placement => placement === null || typeof placement.track === 'number'));
+});
+
+test('story beat extension pushes only colliding neighbours and leaves unused gaps', () => {
+  const m = model(
+    { role: 'mg', clips: [['a', 0, 4, { still: true }], ['b', 4, 8, { still: true }], ['c', 12, 16, { still: true }]] },
+    { role: 'video', clips: [['scene', 0, 20]] },
+  );
+  m[0]!.storySequential = true;
+  const plan = planEdges(m, [{ id: 'a', kind: 'end' }], 3000);
+  assert.equal(plan.deltaMs, 3000);
+  assert.deepEqual(after(m, plan), [[['a', 0, 7], ['b', 7, 11], ['c', 12, 16]], [['scene', 0, 20]]]);
+});
+
+test('independent story beats retain their time when their underlying scene is removed', () => {
+  const m = filmWithMain();
+  const title = m[0]!.clips.find(clip => clip.id === 'title')!;
+  title.storyIndependent = true;
+  const result = after(m, planRemove(m, ['b'], { ripple: false, ...ON }));
+  assert.deepEqual(result.flat().find(([id]) => id === 'title'), ['title', 5, 7]);
+  assert.deepEqual(result.flat().find(([id]) => id === 'c'), ['c', 4, 8]);
+});
 test('the main track is the lowest picture track; what rides on it starts over one of its clips', () => {
   const m = filmWithMain();
   assert.equal(mainTrackOf(m), 1);

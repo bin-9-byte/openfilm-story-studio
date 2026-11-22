@@ -26,6 +26,13 @@ function trackNow(
 ): { track: number } | { newTrack: number; newTrackAttrs?: Record<string, string> } {
   /** A caption file, a known destination, or a clip the track kept identifies it. */
   const anchored = (t: number) => {
+    const story = before.tracks[t]?.attrs;
+    if (story?.['data-story-track']) {
+      const i = after.tracks.findIndex(track =>
+        track.attrs?.['data-story-track'] === story['data-story-track'] &&
+        track.attrs?.['data-story-track-id'] === story['data-story-track-id']);
+      if (i >= 0) return i;
+    }
     if (destinations.has(t)) return destinations.get(t)!;
     const src = before.tracks[t]?.captions?.src;
     const anchors = (before.tracks[t]?.clips.map((c) => c.id) ?? []).filter((id) => !moved.has(id));
@@ -93,6 +100,22 @@ export function inverse(before: Film, after: Film, ops: Op[]): Op[] {
     || (op.op === 'props' && op.edits.every((e) => e.prop !== 'trackOrder' && (e.prop !== 'track' || typeof e.value === 'number'))));
   const movedTo = new Map<string, number>();
   for (const op of ops) {
+    if (op.op === 'story-pack') {
+      for (const track of before.tracks) if (track.attrs?.['data-story-track'] === 'beat') {
+        for (const clip of track.clips) ids.add(clip.id);
+      }
+      continue;
+    }
+    if (op.op === 'story-track-add') {
+      undo.push({ op: 'story-track-remove', id: op.id });
+      continue;
+    }
+    if (op.op === 'story-track-remove') {
+      const at = before.tracks.findIndex(track => track.attrs?.['data-story-track-id'] === op.id);
+      const track = before.tracks[at];
+      if (track) undo.push({ op: 'story-track-add', id: op.id, name: track.attrs?.title ?? '故事线', at, kind: track.attrs?.['data-story-track'] === 'scene' ? 'scene' : 'beat' });
+      continue;
+    }
     if (op.op === 'track-layout') {
       undo.push({ ...op, from: op.to, to: op.from });
       continue;
@@ -131,6 +154,13 @@ export function inverse(before: Film, after: Film, ops: Op[]): Op[] {
     }
     ids.add(op.clip);
     if (op.op === 'split') for (const [id] of now) if (!was.has(id)) ids.add(id);
+  }
+  // Server-side sequential packing may push neighbours beyond those named by the gesture.
+  for (const track of before.tracks) if (track.attrs?.['data-story-track'] === 'beat') {
+    for (const clip of track.clips) {
+      const current = now.get(clip.id);
+      if (current && (clip.at ?? 0) !== (current.row.at ?? 0)) ids.add(clip.id);
+    }
   }
   const destinations = new Map<number, number>();
   for (const [clip, to] of movedTo) {
