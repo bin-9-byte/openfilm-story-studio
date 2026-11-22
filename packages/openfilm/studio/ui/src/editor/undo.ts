@@ -100,6 +100,10 @@ export function inverse(before: Film, after: Film, ops: Op[]): Op[] {
     || (op.op === 'props' && op.edits.every((e) => e.prop !== 'trackOrder' && (e.prop !== 'track' || typeof e.value === 'number'))));
   const movedTo = new Map<string, number>();
   for (const op of ops) {
+    if (op.op === 'screenplay') {
+      undo.push({op:'screenplay',set:Object.fromEntries(Object.keys(op.set).map(id=>[id,before.screenplay?.[id] ? copy(before.screenplay[id]) : null]))});
+      continue;
+    }
     if (op.op === 'story-pack') {
       for (const track of before.tracks) if (track.attrs?.['data-story-track'] === 'beat') {
         for (const clip of track.clips) ids.add(clip.id);

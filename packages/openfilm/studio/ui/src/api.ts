@@ -28,7 +28,9 @@ export type Clip = { src: string; id: string; at?: number; time?: [number] | [nu
 export type TrackCaptions = { src: string; kind: 'captions' | 'subtitles'; srclang?: string; label?: string };
 export type Track = { clips: Clip[]; locked?: boolean; hidden?: boolean; muted?: boolean; attrs?: Record<string, string>; captions?: TrackCaptions };
 /** `keyframes`: the film's @keyframes by name (its clips' own, Studio's: src/clip-motion.mjs). */
-export type Film = { stage?: { w: number; h: number }; tracks: Track[]; keyframes?: Record<string, string> };
+export type StoryBlock = { id: string; text: string };
+export type StoryDocument = { title: string; blocks: StoryBlock[] };
+export type Film = { screenplay?: Record<string, StoryDocument>; stage?: { w: number; h: number }; tracks: Track[]; keyframes?: Record<string, string> };
 /** `value`: film.html as read, every clip named (a clip with no id takes its file's name, as the server and preview do). */
 /** `filmMissing`: the folder is there but film.html is not (read as an empty film; see FolderEvent `film-missing`). */
 /** `outer`: a compound clip's film or a cover is in that project (studio/server/parts.mjs, covers.mjs), `folder` its own folder's name, `kind` which. */
@@ -60,6 +62,7 @@ export interface MediaMade {
   again?: { verb: string; args: Record<string, string | true | string[]>; via: string; model?: string };
 }
 export type Op =
+  | { op: 'screenplay'; set: Record<string, StoryDocument | null> }
   | { op: 'story-pack' }
   | { op: 'story-track-add'; id: string; name: string; at: number; kind?: 'beat' | 'scene' }
   | { op: 'story-track-remove'; id: string }

@@ -12,9 +12,10 @@ import { packStoryTracks } from '../../src/story-sequence.mjs';
 /** @typedef {{ src: string, id: string, [field: string]: unknown }} Clip */
 /** @typedef {{ src: string, kind?: 'captions' | 'subtitles', srclang?: string, label?: string }} TrackCaptions */
 /** @typedef {{ clips: Clip[], locked?: boolean, hidden?: boolean, muted?: boolean, attrs?: Record<string, string>, captions?: TrackCaptions }} Track */
-/** @typedef {{ stage?: { w: number, h: number }, tracks: Track[], keyframes?: Record<string, string> }} FilmValue */
+/** @typedef {{ stage?: { w: number, h: number }, tracks: Track[], screenplay?: Record<string, {title: string, blocks: {id:string,text:string}[]}>, keyframes?: Record<string, string> }} FilmValue */
 /**
  * @typedef {(
+ *   | { op: 'screenplay', set: Record<string, {title:string,blocks:{id:string,text:string}[]} | null> }
  *   | { op: 'story-pack' }
  *   | { op: 'story-track-add', id: string, name: string, at: number, kind?: 'beat' | 'scene' }
  *   | { op: 'story-track-remove', id: string }
@@ -215,6 +216,19 @@ export function applyOps(value, ops) {
         if (!track) throw new EditError(`no track ${op.track}`, 'conflict');
         if (op.value) track[op.field] = true;
         else delete track[op.field];
+        break;
+      }
+      case 'screenplay': {
+        const docs = { ...value.screenplay };
+        for (const [id, doc] of Object.entries(op.set)) {
+          if (!id || ['__proto__', 'constructor', 'prototype'].includes(id)) throw new EditError('Invalid screenplay ID', 'invalid');
+          if (doc === null) delete docs[id];
+          else {
+            if (typeof doc.title !== 'string' || !Array.isArray(doc.blocks) || doc.blocks.some(b => !b || typeof b.id !== 'string' || !b.id || typeof b.text !== 'string') || new Set(doc.blocks.map(b=>b.id)).size !== doc.blocks.length) throw new EditError('Invalid screenplay document', 'invalid');
+            docs[id] = structuredClone(doc);
+          }
+        }
+        if (Object.keys(docs).length) value.screenplay = docs; else delete value.screenplay;
         break;
       }
       case 'story-track-add': {

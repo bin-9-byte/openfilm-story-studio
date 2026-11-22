@@ -10,10 +10,11 @@ import { StoryNavigator } from './StoryNavigator';
 import { StoryHelp, type HelpAction } from './StoryHelp';
 import { storyTime } from '@/lib/story-overview';
 import { SceneReferences, ShotBeatLinks } from './StoryReferences';
+import { StoryContentEditor, StoryDocumentLibrary } from './StoryContentEditor';
 import { SceneTiming } from './StoryTiming';
 import { importStoryImage, storedStoryImage, storyImageUrl } from '@/lib/story-media';
 
-import { storyData, clipEnd, sceneCandidates, sceneRange, confirmedSceneSources, shotImageOp, shotSequenceDuration, type StoryData } from '@/lib/story-content';
+import { storyData, resolvedStoryClip, storyDocument, editStoryDocument, updateStoryText, clipEnd, sceneCandidates, sceneRange, confirmedSceneSources, shotImageOp, shotSequenceDuration, type StoryData } from '@/lib/story-content';
 export { storyData, type StoryData } from '@/lib/story-content';
 
 type Write = (ops: Op[], label?: string) => Promise<string | null>;
@@ -56,7 +57,7 @@ export function StoryPane({ projectId, film, outer, focusedId, selectedIds, time
   const [dirtyFields,setDirtyFields]=React.useState<Set<string>>(new Set());
   const reportDirty=React.useCallback((id:string,dirty:boolean)=>setDirtyFields(previous=>{if(previous.has(id)===dirty)return previous;const next=new Set(previous);if(dirty)next.add(id);else next.delete(id);return next;}),[]);
   const [mode, setMode] = React.useState<'writing' | 'scenes'>('writing');
-  const [sceneDraft, setSceneDraft] = React.useState<{start: number; end: number; title: string} | null>(null);
+  const [sceneDraft, setSceneDraft] = React.useState<{start: number; end: number; title: string; empty?:boolean} | null>(null);
   const [error, setError] = React.useState('');
   const [pending, setPending] = React.useState(0);
   const [navigating, setNavigating] = React.useState(false);
@@ -87,7 +88,7 @@ export function StoryPane({ projectId, film, outer, focusedId, selectedIds, time
     const stop = projectEvents(outer.id, event => { if (event.type === 'film') void load(); });
     return () => { active = false; stop(); };
   }, [projectId, outer?.id, outer?.folder, outer?.kind]);
-  const clips = film.tracks.flatMap(track => track.clips);
+  const clips = film.tracks.flatMap(track => track.clips).map(clip=>resolvedStoryClip(film,clip));
   const scenes = clips.filter(clip => storyData(clip)?.kind === 'scene');
   const shots = clips.filter(clip => storyData(clip)?.kind === 'shot');
   const isShotFilm = Boolean(outer?.kind === 'part') && film.tracks.some(track=>track.attrs?.['data-story-track']==='shot');
@@ -136,6 +137,10 @@ export function StoryPane({ projectId, film, outer, focusedId, selectedIds, time
     const current = storyData(clip);
     if (!current) return;
     if (!writable(clip)) {setError('所在轨道已锁定。');return;}
+    if(current.kind==='beat' && (field==='description'||field==='title')) {
+      const latest=filmRef.current.tracks.flatMap(track=>track.clips).find(item=>item.id===clip.id)??clip;
+      void commit(field==='description'?updateStoryText(filmRef.current,latest,value):editStoryDocument(filmRef.current,latest,{...storyDocument(filmRef.current,latest),title:value}),'编辑共享剧本正文');return;
+    }
     void commit([{ op: 'fields', clip: clip.id,
       fields: { attrs: { ...clip.attrs, 'data-story': JSON.stringify({ ...current, [field]: value }) } } }], '编辑剧本与分镜');
   }
@@ -192,9 +197,11 @@ export function StoryPane({ projectId, film, outer, focusedId, selectedIds, time
         index = 0;
         ops.push({op:'story-track-add',id:crypto.randomUUID(),name:'A 线 · 剧本主线',at:0});
       }
+      const contentId=`content:${id}`;
+      ops.push({op:'screenplay',set:{[contentId]:{title:'新节拍',blocks:[{id:crypto.randomUUID(),text:''}]}}});
       ops.push({ op: 'insert', track: index, at: Math.round(timeMs) / 1000, clip: {
         id, src: 'story-beat.html', time: [0, 4],
-        attrs: { 'data-story': JSON.stringify({ kind: 'beat', title: '新节拍', description: '' }) },
+        attrs: { 'data-story': JSON.stringify({ kind: 'beat', contentId, title: '新节拍', description: '' }) },
       } });
       const failure = await write(ops, '新增剧本节拍');
       setError(failure ?? '');
@@ -220,7 +227,7 @@ export function StoryPane({ projectId, film, outer, focusedId, selectedIds, time
     if (!title.trim() || !Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) {
       setError('请填写场次名称和有效的起止时间。'); return;
     }
-    if (!sceneCandidates(film, {id:'draft',src:'',at:start,time:[0,end-start]}).length) {
+    if (!sceneDraft.empty && !sceneCandidates(film, {id:'draft',src:'',at:start,time:[0,end-start]}).length) {
       setError('这个范围没有剧本节拍，请调整选区。'); return;
     }
     const track = film.tracks.findIndex(track => track.attrs?.['data-story-track'] === 'scene');
@@ -240,9 +247,9 @@ export function StoryPane({ projectId, film, outer, focusedId, selectedIds, time
       ops.push({op:'insert',track:track < 0 ? film.tracks.length : track,at:start,clip:{
         id,src:`${folder}/film.html`,time:[0,end-start],
         attrs:{'data-story':JSON.stringify({kind:'scene',title:title.trim(),scriptSource:'confirmed',
-          sourceRefs: sceneCandidates(film,{id:'draft',src:'',at:start,time:[0,end-start]}).map(({clip})=>({id:clip.id,title:storyData(clip)!.title,description:storyData(clip)!.description ?? '',at:clip.at ?? 0,end:clipEnd(clip)}))})},
+          sourceRefs: (sceneDraft.empty?[]:sceneCandidates(film,{id:'draft',src:'',at:start,time:[0,end-start]})).map(({clip})=>({id:clip.id,title:storyData(clip)!.title,description:storyData(clip)!.description ?? '',...(storyData(clip)?.contentId?{contentId:storyData(clip)!.contentId}:{}),at:clip.at ?? 0,end:clipEnd(clip)}))})},
       }});
-      const failure = await write(ops,'从剧本选区划为场次');
+      const failure = await write(ops,sceneDraft.empty?'新建空场次':'从剧本选区划为场次');
       setError(failure ?? '');
       if (!failure) { setSceneDraft(null); setMode('scenes'); setView('script'); onSelectClip(id); }
     } catch (reason) {setError(reason instanceof Error ? reason.message : String(reason));}
@@ -343,6 +350,7 @@ export function StoryPane({ projectId, film, outer, focusedId, selectedIds, time
       <div className="studio-context-copy">{outer&&<button className="studio-back" disabled={navigating} onClick={()=>void leaveScene()}>返回场次主轨</button>}<span>{activeView==='overview'?'全片阅读':`${selectedTrack?.attrs?.title??(isShotFilm?'场内镜头':mode==='scenes'?'场次划分':'剧本线')} / ${objectKind}`}</span>{selected&&activeView!=='overview'&&<small>{storyTime(selected.at??0)}—{storyTime(clipEnd(selected))} · {(clipEnd(selected)-(selected.at??0)).toFixed(1)} 秒</small>}</div>
       <div className="studio-context-actions">
         {view!=='overview'&&<div className="studio-view-switch" aria-label="内容与影像">{isShotFilm?<><button aria-pressed={activeView==='board'} onClick={()=>setView('board')}>分镜</button><button disabled={!selected} aria-pressed={activeView==='script'} onClick={()=>setView('script')}>镜头详情</button></>:<button aria-pressed={activeView==='script'} onClick={()=>setView('script')}>{data?.kind==='beat'?'节拍':'剧本'}</button>}<button aria-pressed={view==='picture'} onClick={()=>setView('picture')}>影像</button></div>}
+        {!outer&&view!=='overview'&&<button className="studio-secondary" disabled={pending>0} onClick={async()=>{await settle();const start=Math.max(timeMs/1000,...scenes.map(clipEnd),0);setSceneDraft({start,end:start+4,title:`场次 ${scenes.length+1}`,empty:true});setMode('scenes');setView('script');}}>新建空场次</button>}
         {!outer&&view!=='overview'&&<button className={mode==='scenes' && data?.kind!=='scene'?'story-primary':'studio-secondary'} onClick={()=>void prepareScene()}>选区划为场次</button>}
         {!outer&&mode==='writing'&&view!=='overview'&&(film.tracks.some(track=>track.attrs?.['data-story-track']==='beat')?<details className="studio-add-menu"><summary className="story-primary" aria-label="新增节拍">新增节拍</summary><div aria-label="选择新增节拍的剧本线">{film.tracks.map((track,index)=>track.attrs?.['data-story-track']==='beat'&&<button key={index} disabled={Boolean(pending)||track.locked} onClick={event=>{event.currentTarget.closest('details')!.open=false;void addBeat(index);}}>{track.attrs.title??'剧本线'}节拍</button>)}</div></details>:<button className="story-primary" disabled={pending>0} onClick={()=>void addBeat()}>新增节拍</button>)}
         {!outer&&mode==='scenes'&&data?.kind==='scene'&&view!=='overview'&&<button className="story-primary" disabled={pending>0||navigating} onClick={()=>void enterScene()}>{navigating?'正在进入…':'进入本场分镜'}</button>}
@@ -352,13 +360,14 @@ export function StoryPane({ projectId, film, outer, focusedId, selectedIds, time
     {helpOpen&&<StoryHelp onClose={()=>setHelpOpen(false)} onAction={action=>void helpAction(action)}/>}
     {activeView==='overview' && <StoryOverview projectId={projectId} film={film} outer={outer} mediaBase={mediaBase} projectName={projectName} focusedId={focusedId} onLocalView={setView} settle={settle}/>}
     {activeView !== 'picture' && activeView !== 'overview' && <div className="studio-edit-layout"><StoryNavigator film={film} kind={sidebarKind} selectedId={selected?.id} onSelect={clip=>void focusHere(clip)}/><div ref={documentRef} className="story-document">
+      {!outer&&mode==='writing'&&<StoryDocumentLibrary film={film} at={timeMs/1000} write={commit} disabled={pending>0}/>}
       {sceneDraft && <section className="story-scene-draft" aria-label="划分场次">
-        <strong>从剧本选区划分场次</strong><p>引用范围内的完整节拍；保留跨场内容，不复制正文。</p>
+        <strong>{sceneDraft.empty?'新建空场次':'从剧本选区划分场次'}</strong><p>{sceneDraft.empty?'从画面或场面开始，无需先写节拍。稍后可关联正文并添加空镜头。':'先按时间范围引用节拍，创建后可在来源关联中勾选具体段落。'}</p>
         <label>场次名称<input aria-label="新场次名称" value={sceneDraft.title} onChange={e=>setSceneDraft({...sceneDraft,title:e.target.value})}/></label>
         <label>开始（秒）<input aria-label="场次选区开始" type="number" min="0" step="0.1" value={sceneDraft.start} onChange={e=>setSceneDraft({...sceneDraft,start:Number(e.target.value)})}/></label>
         <label>结束（秒）<input aria-label="场次选区结束" type="number" min="0" step="0.1" value={sceneDraft.end} onChange={e=>setSceneDraft({...sceneDraft,end:Number(e.target.value)})}/></label>
-        <div className="story-scene-preview" aria-label="将引用的剧本内容">{sceneCandidates(film,{id:'draft',src:'',at:sceneDraft.start,time:[0,Math.max(0,sceneDraft.end-sceneDraft.start)]}).map(({clip,line,crosses})=><p key={clip.id}>{line} · {storyData(clip)?.title}{crosses ? ' · 跨场节拍' : ''}</p>)}</div>
-        <button disabled={pending > 0} onClick={()=>void createScene()}>确认划为场次</button><button onClick={()=>setSceneDraft(null)}>取消划分</button>
+        <div className="story-scene-preview" aria-label="将引用的剧本内容" hidden={sceneDraft.empty}>{sceneCandidates(film,{id:'draft',src:'',at:sceneDraft.start,time:[0,Math.max(0,sceneDraft.end-sceneDraft.start)]}).map(({clip,line,crosses})=><p key={clip.id}>{line} · {storyData(clip)?.title}{crosses ? ' · 跨场节拍' : ''}</p>)}</div>
+        <button disabled={pending > 0} onClick={()=>void createScene()}>{sceneDraft.empty?'创建空场次':'确认划为场次'}</button><button onClick={()=>setSceneDraft(null)}>取消划分</button>
       </section>}
       {!selected && !isShotFilm && <section className="story-enter"><h2>{mode === 'writing' ? '从剧本开始' : '从剧本划分场次'}</h2>
         <p>{mode === 'writing' ? '先写剧本节拍，再划分场次和设计分镜。时间标尺表示预计呈现时长。' : '选择剧本节拍，或按住 Shift 在标尺上拖出选区，再点击「选区划为场次」。'}</p>
@@ -369,7 +378,7 @@ export function StoryPane({ projectId, film, outer, focusedId, selectedIds, time
         {contextGroups.length ? <div className="story-context-groups">{contextGroups.map((group, index) =>
           <section key={index}><h3>{group.name}</h3>{group.entries.map(beat => {
             const linked = Boolean(contextScene.attrs?.['data-link']) && beat.attrs?.['data-link'] === contextScene.attrs?.['data-link'];
-            return <p key={beat.id}><strong>{storyData(beat)?.title}</strong>{storyData(beat)?.description && <span className="story-context-body">{storyData(beat)?.description}</span>}<small>{storyData(contextScene)?.scriptSource === 'confirmed' ? '已确认的剧本来源' : linked ? '关联本场' : '独立节拍 · 时间范围经过本场'}</small></p>;
+            return <p key={beat.id}><strong>{storyData(beat)?.title}</strong>{storyData(beat)?.description && <span className="story-context-body">{storyData(confirmedSceneSources(contextFilm!,contextScene!).find(entry=>entry.ref.id===beat.id)?.clip??resolvedStoryClip(contextFilm!,beat))?.description}</span>}<small>{storyData(contextScene)?.scriptSource === 'confirmed' ? '已确认的剧本来源' : linked ? '关联本场' : '独立节拍 · 时间范围经过本场'}</small></p>;
           })}</section>)}</div> : <p className="story-context-empty">本场暂无关联或时间重叠的故事节拍。</p>}
       </details>}
       {isShotFilm && contextFilm && contextScene && storyData(contextScene)?.scriptSource === 'confirmed' && confirmedSceneSources(contextFilm,contextScene).some(ref=>ref.changed||!ref.clip) && <div className="story-notice story-review" role="alert">本场剧本来源有变化或删除，请返回场次核对。{confirmedSceneSources(contextFilm,contextScene).filter(ref=>!ref.clip).map(({ref})=><p key={ref.id}>来源已删除 · {ref.title}：{ref.description}（上次确认内容）</p>)}</div>}
@@ -432,6 +441,7 @@ export function StoryPane({ projectId, film, outer, focusedId, selectedIds, time
               {data?.kind === 'beat' && <>
                 <Field label="节拍内容" multiline value={data?.description ?? ''} onSave={value => update(selected!, 'description', value)} />
                 <p className="studio-field-hint">离开输入框自动保存 · 时长可在底部轨道调整</p>
+                <StoryContentEditor film={film} clip={selected!} write={commit} disabled={pending>0||!writable(selected!)}/>
                 <details className="studio-notes"><summary>创作备注</summary><Field label="节拍备注" multiline value={data?.notes ?? ''} onSave={value => update(selected!, 'notes', value)} /></details>
                 <button className="studio-link-control" aria-pressed={linked} disabled={!linked && !target} onClick={changeLink}>
                 {linked ? <Link2 size={14} /> : <Link2Off size={14} />}{linked ? '跟随场次 · 点击解除关联' : '独立节拍 · 点击关联场次'}
