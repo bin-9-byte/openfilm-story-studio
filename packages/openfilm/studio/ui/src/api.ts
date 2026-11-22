@@ -6,6 +6,7 @@ import type { ExportJob } from '@/lib/export-jobs';
 import type { SubtitleStyle } from '@/lib/subtitles';
 import { studioHost, type HostWritingModel } from '@/lib/host';
 import { watchStudioVersion } from '@/lib/studio-version';
+import {BROWSER_LOCAL} from './browser/mode';
 
 /** `working`: an agent of the app's chat is working in it right now (it cannot be deleted meanwhile). */
 /** GET /api/version: this Studio's, and npm's latest (null when never learnt; `checking` false: never asked). */
@@ -101,6 +102,10 @@ export class ApiError extends Error {
 
 /** Writes on their way (edits, renames…): a reload for a new Studio waits for them (studioVersion). */
 let writing = 0;
+export function beginLocalWrite():()=>void{writing+=1;return()=>{writing-=1;};}
+export async function waitForLocalWrites():Promise<void>{
+  for(let attempts=0;writing>0;attempts++){if(attempts>500)throw new Error('仍在保存，请稍后再导出工程。');await new Promise(resolve=>setTimeout(resolve,20));}
+}
 
 /** `/api/<path>`, its JSON answer; an ApiError when Studio refuses (lib/plugin-api calls a plugin's routes this way). */
 export async function call<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
@@ -388,6 +393,11 @@ export type FolderEvent = { type: 'film'; rev: string } | { type: 'files'; paths
  * `openfilm open` opens a browser when no page is (a tab behind others, a minimized window).
  */
 export function listen(path: string, on: (event: FolderEvent) => void, { onBack, watch = false, gone }: { onBack?: () => void; watch?: boolean; gone?: () => Promise<boolean> } = {}): () => void {
+  if(BROWSER_LOCAL){
+    const receive=(message:MessageEvent)=>{if(message.data?.type==='openfilm-local-event'&&message.data.path===path)on(message.data.event as FolderEvent);};
+    navigator.serviceWorker.addEventListener('message',receive);
+    return()=>navigator.serviceWorker.removeEventListener('message',receive);
+  }
   const inSight = () => document.visibilityState === 'visible';
   const url = () => `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/${path}${watch ? `?visible=${inSight() ? 1 : 0}` : ''}`;
   const tell = () => { if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ visible: inSight() })); };

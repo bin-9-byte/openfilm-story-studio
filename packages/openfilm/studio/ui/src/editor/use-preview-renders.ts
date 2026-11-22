@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { addHeat, joinStretches, lateStretches, sameStretches, type Heat } from '@/lib/preview-renders';
 import type { PlayedReport, PreviewHandle, PreviewRender } from './Preview';
+import {BROWSER_LOCAL} from '@/browser/mode';
 export type MadePreview = { a: number; b: number; key: string; state: 'waiting' | 'making' | 'ready' | 'failed'; ratio?: number; reason?: string };
 export type PreviewRenderControl = {
   render(clipId?: string): void; cancel(): void; clear(): void;
@@ -23,6 +24,7 @@ export function usePreviewRenders({ projectId, folder, fps, playing, on, film, f
   const lateNow = () => chunks(joinStretches([...known.current, ...lateStretches(heat.current)]).map(([a,b]) => [a, Math.min(end.current ?? Infinity, b)] as [number,number]).filter(([a,b])=>b>a));
   const endpoint = `/api/projects/${encodeURIComponent(projectId)}/preview-cache`;
   const command = useCallback(async (action: string) => {
+    if(BROWSER_LOCAL)return;
     const response = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action }) });
     if (!response.ok) throw new Error('Preview command failed');
   }, [endpoint]);
@@ -35,7 +37,7 @@ export function usePreviewRenders({ projectId, folder, fps, playing, on, film, f
   }, []);
   useEffect(() => {
     heat.current = new Map(); known.current = []; stopped.current = false; setLate([]); setMade([]); setError(false);
-    if (!(fps > 0)) return;
+    if (BROWSER_LOCAL || !(fps > 0)) return;
     let alive = true;
     void fetch(`${endpoint}?fps=${fps}`).then((r) => r.ok ? r.json() : null).then((answer) => {
       if (!alive || !answer?.late?.length) return;
@@ -54,7 +56,7 @@ export function usePreviewRenders({ projectId, folder, fps, playing, on, film, f
   }, []);
   useEffect(() => { if (!on || playing || editing) void command('pause').catch(() => setError(true)); }, [on, playing, editing, command]);
   useEffect(() => {
-    if (!on || !late.length || !(fps > 0) || stopped.current) return;
+    if (BROWSER_LOCAL || !on || !late.length || !(fps > 0) || stopped.current) return;
     let alive = true, timer = 0;
     const version = revision.current;
     const ask = async () => {
@@ -72,6 +74,7 @@ export function usePreviewRenders({ projectId, folder, fps, playing, on, film, f
     return () => { alive = false; window.clearTimeout(timer); };
   }, [on, late, fps, playing, editing, endpoint, film, files]);
   const request = useCallback((ranges: [number, number][]) => {
+    if(BROWSER_LOCAL){setError(true);return;}
     stopped.current = false; void command('retry').catch(() => {}); known.current = joinStretches([...known.current, ...ranges]); setLate(lateNow()); setError(false);
   }, [command]);
   const stop = useCallback((clear: boolean) => {

@@ -88,7 +88,8 @@
     "build:ui": "vite build --config studio/ui/vite.config.ts",
     "prepare": "npm run build:ui",
     "prepack": "node scripts/product.mjs official",
-    "postpack": "node scripts/product.mjs restore"
+    "postpack": "node scripts/product.mjs restore",
+    "build:browser": "vite build --config studio/ui/vite.config.ts --mode browser"
   },
   "devDependencies": {
     "@fontsource-variable/inter": "^5.3.0",

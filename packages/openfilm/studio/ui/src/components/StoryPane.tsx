@@ -203,8 +203,11 @@ export function StoryPane({ projectId, film, outer, focusedId, selectedIds, time
     finally { setPending(value => value - 1); }
   }
 
-  function prepareScene() {
-    const draft = sceneRange(film, selectedIds, range);
+  async function prepareScene() {
+    // Clicking the action blurs a draft field. Wait for that write rather than
+    // disabling the button between pointer-down and click and losing the action.
+    await settle();
+    const draft = sceneRange(filmRef.current, selectedIds, range);
     if (draft.end <= draft.start) { setError('先选择剧本节拍，或在时间标尺上按住 Shift 拖出选区。'); return; }
     setError('');
     setSceneDraft({...draft,title:`场次 ${scenes.length + 1}`});
@@ -340,7 +343,7 @@ export function StoryPane({ projectId, film, outer, focusedId, selectedIds, time
       <div className="studio-context-copy">{outer&&<button className="studio-back" disabled={navigating} onClick={()=>void leaveScene()}>返回场次主轨</button>}<span>{activeView==='overview'?'全片阅读':`${selectedTrack?.attrs?.title??(isShotFilm?'场内镜头':mode==='scenes'?'场次划分':'剧本线')} / ${objectKind}`}</span>{selected&&activeView!=='overview'&&<small>{storyTime(selected.at??0)}—{storyTime(clipEnd(selected))} · {(clipEnd(selected)-(selected.at??0)).toFixed(1)} 秒</small>}</div>
       <div className="studio-context-actions">
         {view!=='overview'&&<div className="studio-view-switch" aria-label="内容与影像">{isShotFilm?<><button aria-pressed={activeView==='board'} onClick={()=>setView('board')}>分镜</button><button disabled={!selected} aria-pressed={activeView==='script'} onClick={()=>setView('script')}>镜头详情</button></>:<button aria-pressed={activeView==='script'} onClick={()=>setView('script')}>{data?.kind==='beat'?'节拍':'剧本'}</button>}<button aria-pressed={view==='picture'} onClick={()=>setView('picture')}>影像</button></div>}
-        {!outer&&view!=='overview'&&<button className={mode==='scenes' && data?.kind!=='scene'?'story-primary':'studio-secondary'} disabled={pending>0} onClick={prepareScene}>选区划为场次</button>}
+        {!outer&&view!=='overview'&&<button className={mode==='scenes' && data?.kind!=='scene'?'story-primary':'studio-secondary'} onClick={()=>void prepareScene()}>选区划为场次</button>}
         {!outer&&mode==='writing'&&view!=='overview'&&(film.tracks.some(track=>track.attrs?.['data-story-track']==='beat')?<details className="studio-add-menu"><summary className="story-primary" aria-label="新增节拍">新增节拍</summary><div aria-label="选择新增节拍的剧本线">{film.tracks.map((track,index)=>track.attrs?.['data-story-track']==='beat'&&<button key={index} disabled={Boolean(pending)||track.locked} onClick={event=>{event.currentTarget.closest('details')!.open=false;void addBeat(index);}}>{track.attrs.title??'剧本线'}节拍</button>)}</div></details>:<button className="story-primary" disabled={pending>0} onClick={()=>void addBeat()}>新增节拍</button>)}
         {!outer&&mode==='scenes'&&data?.kind==='scene'&&view!=='overview'&&<button className="story-primary" disabled={pending>0||navigating} onClick={()=>void enterScene()}>{navigating?'正在进入…':'进入本场分镜'}</button>}
         {isShotFilm&&view!=='overview'&&<button className="story-primary" disabled={pending>0} onClick={addShot}><Plus size={16}/>新增镜头</button>}

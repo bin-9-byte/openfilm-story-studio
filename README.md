@@ -6,6 +6,8 @@ A local-first screenplay and storyboard workbench built on [OpenFilm](https://gi
 
 **[启动与使用说明](STORY-WORKBENCH.md)** · [交互设计](docs/story-first-interaction.md) · [页面设计与验证](docs/workbench-design.md) · [待办](TODO.md)
 
+新增 **[浏览器本地版与 Vercel 部署](docs/browser-local.md)**：打开网页直接创作，工程与素材保存在当前浏览器，首次加载后支持断网刷新与重开。保留剧本、故事线、分镜、原生时间轴剪辑和会话撤销；提供完整工程导入与导出备份。无需启动 Node 服务或配置云数据库。根目录已提供 `vercel.json`。
+
 保留上游 MIT 许可证及原始说明。以下为 OpenFilm 原版介绍。
 
 ---

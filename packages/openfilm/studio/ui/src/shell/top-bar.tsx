@@ -13,11 +13,13 @@
  */
 import * as React from 'react';
 import { MonitorDown, Puzzle } from 'lucide-react';
+import {BROWSER_LOCAL} from '@/browser/mode';
+import {BrowserActions} from '@/browser/BrowserHome';
 import { api, ApiError, type ProjectFilm } from '@/api';
 import { useT } from '@/i18n';
 import { readCanvasDoc } from '@/lib/canvas';
 import { studioHost } from '@/lib/host';
-import { leaveProject, openProject } from '@/lib/navigate';
+import { go, leaveProject, openProject } from '@/lib/navigate';
 import { AppMenu } from '@/components/AppMenu';
 import { DesktopDialog } from '@/components/DesktopDialog';
 import { PLUGIN_ICONS } from '@/components/library/PluginsPane';
@@ -120,8 +122,8 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
   const projectTitle = <ProjectTitle tab={Boolean(studioHost?.tabs)} name={title} editing={renaming} draft={titleDraft} onDraft={setTitleDraft}
     onRename={startRename} onCommit={() => void commitTitle()} onCancel={() => setRenaming(false)}
     facts={{ project: loaded.project, ...(bar ? { film: bar.film } : {}) }}
-    actions={{ onRename: startRename, onCoverFromFrame: coverFromFrame, onReveal: () => reveal('') }}
-    onAll={() => setProjectsOpen(true)} />;
+    actions={{ onRename: startRename, ...(!BROWSER_LOCAL?{onCoverFromFrame: coverFromFrame, onReveal: () => reveal('')}:{}) }}
+    onAll={() => BROWSER_LOCAL?go('/'):setProjectsOpen(true)} />;
   /* The desktop's tabs share the left edge; a browser keeps the project title centered. */
   return (<>
     <div data-titlebar className="relative flex h-8 min-w-0 items-center gap-1 bg-[var(--bg-titlebar)] px-[6px]" style={{ gridArea: 'bar', ...(studioHost?.tabs ? { gap: 0 } : {}) }} onContextMenu={event => event.preventDefault()}>
@@ -135,12 +137,12 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
       {bar?.menu}
       {/* the window's controls over this, then the app menu */}
       <div aria-hidden className={studioHost?.tabs ? tabStyles.windowSpace : 'shrink-0 self-stretch'} style={{ width: 'var(--titlebar-logo-x)' }} />
-      <div className={studioHost?.tabs ? tabStyles.system : 'pointer-events-auto relative flex min-w-0 items-center'}><AppMenu onSettings={setSettingsOpen} /></div>
+      <div className={studioHost?.tabs ? tabStyles.system : 'pointer-events-auto relative flex min-w-0 items-center'}>{BROWSER_LOCAL?<BrowserActions projectId={projectId}/>:<AppMenu onSettings={setSettingsOpen} />}</div>
       {studioHost?.tabs ? <ProjectTabs current={projectTitle} onProjects={() => setProjectsOpen(true)} onRenameCurrent={startRename} onCoverCurrent={coverFromFrame} /> : null}
       <div className="pointer-events-auto relative flex min-w-0 items-center gap-1">
         <UpdateButton />
         <WebUpdateButton />
-        {!studioHost && <Tooltip label={t('desktop.title')} side="bottom">
+        {!studioHost && !BROWSER_LOCAL && <Tooltip label={t('desktop.title')} side="bottom">
           <button type="button" aria-haspopup="dialog" onClick={() => setDesktopOpen(true)}
             className={`flex h-[26px] shrink-0 items-center gap-1.5 rounded-md px-2 text-[12px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] ${desktopOpen ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`}>
             <MonitorDown size={14} />
@@ -153,9 +155,9 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
         {/* how the page's panels are arranged */}
         <LayoutMenu frame={frame} className={TOP_BTN} />
         {/* the project's version history, whichever workbench is shown */}
-        {history.button}
+        {!BROWSER_LOCAL&&history.button}
         {/* the workbench's own: for the edit its export (the canvas has its own bars) */}
-        {bar?.tools}
+        {!BROWSER_LOCAL && bar?.tools}
         {/* the buttons plugins put on the bar (openfilm/studio topBar) */}
         <PluginTools />
         {/* the edit or the canvas, in the panes' place: the one shown, by its name, and a click for the other */}

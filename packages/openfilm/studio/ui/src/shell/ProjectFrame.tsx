@@ -13,7 +13,7 @@
  * through the wiring, when the operation runs.
  */
 import * as React from 'react';
-import { api, PREFS_EVENT, type MediaMade, type MissingMedia } from '@/api';
+import { api, beginLocalWrite, PREFS_EVENT, type MediaMade, type MissingMedia } from '@/api';
 import { useT } from '@/i18n';
 import { batchMap } from '@/lib/batch-map';
 import { decodes, type PlayCheck } from '@/lib/decodes';
@@ -34,6 +34,8 @@ import { LayoutOver, useLayout } from './layout';
 import { LibraryPlace, useLibraryShown } from './library';
 import { openPlugins, setExampleOpener } from '@/lib/plugins-window';
 import { useProjectRead } from './project-read';
+import {BROWSER_LOCAL} from '@/browser/mode';
+import {browserMediaFacts} from '@/browser/media-facts';
 import { PageAsks, PageWindows, TopBar, usePageWindows } from './top-bar';
 import { AmongPanes, InPanesPlace, useWorkbenchShown } from './workbenches';
 
@@ -110,7 +112,7 @@ export function useProjectFrame(projectId: string) {
     return () => window.removeEventListener(PREFS_EVENT, changed);
   }, []);
   React.useEffect(() => {
-    if (!rawListing) return undefined;
+    if (BROWSER_LOCAL || !rawListing) return undefined;
     let alive = true;
     let timer = 0;
     let before: Record<string, MediaProxy> | null = null;
@@ -233,7 +235,7 @@ export function useProjectFrame(projectId: string) {
    * Each file's progress is its bytes sent (XMLHttpRequest: fetch cannot tell how much of a body has gone), then 1 and
    * where it landed
    */
-  const onImport = React.useCallback(async (files: File[], into: string, onProgress: ImportProgress): Promise<string[]> => {
+  const onImportImpl = React.useCallback(async (files: File[], into: string, onProgress: ImportProgress): Promise<string[]> => {
     const landed: string[] = [];
     /* in the app a dropped file's path is known: copied on this computer (cloned where the disk can: at once, and no
        more room taken), not sent through the page */
@@ -249,10 +251,12 @@ export function useProjectFrame(projectId: string) {
       return landed;
     }
     for (const [i, file] of files.entries()) {
+      const localFacts=BROWSER_LOCAL?await browserMediaFacts(file):null;
       // eslint-disable-next-line no-await-in-loop
       const { ok, body } = await new Promise<{ ok: boolean; body: { path?: string; error?: string; unreadable?: string } }>((done) => {
         const xhr = new XMLHttpRequest();
         xhr.open('PUT', `${projectApi}/files?path=${encodeURIComponent(`${into}/${file.name}`)}`);
+        if(localFacts)xhr.setRequestHeader('x-local-media-facts',JSON.stringify(localFacts));
         xhr.upload.onprogress = (e) => { if (e.lengthComputable && e.total > 0) onProgress(i, Math.min(0.99, e.loaded / e.total)); };
         xhr.onload = () => {
           let body = {};
@@ -269,6 +273,10 @@ export function useProjectFrame(projectId: string) {
     }
     return landed;
   }, [projectApi, t, toast, onBring]);
+  const onImport=React.useCallback(async(...args:Parameters<typeof onImportImpl>)=>{
+    const finish=BROWSER_LOCAL?beginLocalWrite():undefined;
+    try{return await onImportImpl(...args);}finally{finish?.();}
+  },[onImportImpl]);
   const onMove = React.useCallback(async (from: string, to: string) => mediaResult(await fetch(`${projectApi}/files`, {
     method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ from, to }),
   })), [projectApi]);

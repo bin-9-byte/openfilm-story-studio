@@ -21,6 +21,8 @@ import { usePreviewPrefs } from '@/lib/preview-prefs';
 import { chromiumBased } from '@/lib/browser';
 import { PictureZoom } from '@/lib/viewer-zoom';
 import { useSettledProblem } from './use-settled-problem';
+import {BROWSER_LOCAL} from '../browser/mode';
+import {BrowserPreview} from '../browser/BrowserPreview';
 
 /** How far the film's frame reaches past the picture's box on each side, in px (see the `stage-frames` clip). */
 const BLEED = 1;
@@ -89,7 +91,7 @@ export type StageEvent =
   | { event: 'key'; key: KeyboardEvent }
   | { event: 'reset' };
 
-type Props = {
+export type PreviewProps = {
   folder: string;
   stage: { w: number; h: number };
   /** where the film is: a loaded page draws its first frame there */
@@ -136,7 +138,7 @@ const HOLD_POLL_MS = 100;
 const PLAY_CUE_MS = 12_000;
 type StillSeek = { key: number; t: number; seq: number; scrub: boolean; drawn?: boolean; finish?: (ready?: boolean | null) => void };
 
-export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folder, stage, time, fps, onInfo, onKey, onError, onPlayed, onSpans, onUndecoded, onShown, waiting = false, filmUnavailable = false, managed = false, revision, onRevisionNeeded, children }, ref) {
+const NativePreview = forwardRef<PreviewHandle, PreviewProps>(function Preview({ folder, stage, time, fps, onInfo, onKey, onError, onPlayed, onSpans, onUndecoded, onShown, waiting = false, filmUnavailable = false, managed = false, revision, onRevisionNeeded, children }, ref) {
   const t = useT();
   const origin = new URL(folder).origin;
   const [frames, setFrames] = useState<PreviewFrame[]>(managed ? [] : [{ key: 1, ready: false }]);
@@ -692,3 +694,5 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
     </div>
   );
 });
+
+export const Preview = BROWSER_LOCAL ? BrowserPreview : NativePreview;

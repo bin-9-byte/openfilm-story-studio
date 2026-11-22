@@ -22,6 +22,9 @@ import { sourcesApi } from './lib/project-sources';
 import { LIST_WAIT_MS, within } from './lib/projects-page';
 import { afterPaintIdle } from './lib/after-paint-idle';
 import { loadCanvas } from './components/canvas/load';
+import {BROWSER_LOCAL} from './browser/mode';
+import {BrowserHome} from './browser/BrowserHome';
+import {BrowserUpdate} from './browser/BrowserUpdate';
 
 const projectIn = (path: string) => /^\/projects\/([\w-]+)/.exec(path)?.[1] ?? null;
 
@@ -54,7 +57,7 @@ export function App() {
      tabs, the projects (no tab is open) */
   const [none, setNone] = useState(false);
   useEffect(() => {
-    if (id || tabs) return;
+    if (id || tabs || BROWSER_LOCAL) return;
     let alive = true;
     /* the list not read (refused, or no answer in time): the Projects window, which says so and tries again */
     void within(api.projects(), LIST_WAIT_MS).then((projects) => {
@@ -67,6 +70,7 @@ export function App() {
   }, [id]);
 
   const page = id ? <ProjectPage key={id} projectId={id} />
+    : BROWSER_LOCAL ? <BrowserHome />
     : tabs ? <Launcher onOpen={openProject} />
     : !none ? <BrandLoadingScreen labelKey="projects.opening" />
       : (
@@ -74,7 +78,7 @@ export function App() {
           <ProjectsPopover open currentProjectId="" onOpen={(next) => go(`/projects/${next}`)} onCurrentRemoved={() => {}} />
         </div>
       );
-  return <>{page}<ConnectionNotice /><WhatsNew /></>;
+  return <>{page}<ConnectionNotice /><WhatsNew />{BROWSER_LOCAL&&<BrowserUpdate/>}</>;
 }
 
 /**

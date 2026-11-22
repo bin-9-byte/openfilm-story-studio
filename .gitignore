@@ -21,3 +21,5 @@ dist/
 # OS and editors
 .DS_Store
 *.log
+dist-browser/
+.vercel/
