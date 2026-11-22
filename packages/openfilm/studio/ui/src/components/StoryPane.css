@@ -104,7 +104,7 @@
 .studio-add-menu > div { position:absolute; right:0; top:calc(100% + 8px); min-width:240px; max-height:300px; overflow:auto; z-index:50; border:1px solid var(--line); background:var(--bg-panel); border-radius:8px; padding:4px; box-shadow:0 8px 24px #0005; }
 .studio-add-menu > div button { display:block; width:100%; padding:10px 12px; text-align:left; font-size:12px; border-radius:4px; }
 .studio-add-menu > div button:hover { background:var(--bg-field); }
-.studio-edit-layout { display:grid; grid-template-columns:216px minmax(0,1fr); flex:1; min-height:0; overflow:hidden; }
+.studio-edit-layout { display:grid; grid-template-columns:260px minmax(0,1fr); flex:1; min-height:0; overflow:hidden; }
 .studio-navigator { display:flex; flex-direction:column; border-right:1px solid var(--line); background:color-mix(in srgb,var(--bg-panel) 92%,black); min-height:0; }
 .studio-navigator-heading { display:flex; justify-content:space-between; align-items:center; padding:16px 16px 12px; font-size:12px; }
 .studio-navigator-heading h2 { font-size:12px; font-weight:500; }
@@ -166,7 +166,7 @@
 .studio-help-check strong { color:var(--text); font-weight:400; margin-right:8px; }
 .studio-help footer { padding:16px 24px; color:var(--text-muted); font-size:12px; line-height:1.8; }
 @media(max-width:1000px) { .studio-edit-layout{grid-template-columns:184px minmax(0,1fr);} .studio-product>span{max-width:180px;} .studio-contextbar{flex-wrap:wrap;} .studio-context-actions{margin-left:auto;} .studio-edit-layout .story-page{padding:20px 24px;} }
-@media(max-width:700px) { .studio-edit-layout{grid-template-columns:144px minmax(0,1fr);} .studio-header-top{padding:8px 12px;} .studio-navigation{padding:0 12px;gap:20px;} .studio-save-state{font-size:11px;} .studio-product>span{display:none;} .studio-contextbar{padding:8px 12px;} .studio-edit-layout .story-page{padding:20px;} .studio-view-switch{margin-right:0;} }
+@media(max-width:700px) { .studio-edit-layout{grid-template-columns:200px minmax(0,1fr);} .studio-header-top{padding:8px 12px;} .studio-navigation{padding:0 12px;gap:20px;} .studio-save-state{font-size:11px;} .studio-product>span{display:none;} .studio-contextbar{padding:8px 12px;} .studio-edit-layout .story-page{padding:20px;} .studio-view-switch{margin-right:0;} }
 
 .studio-edit-layout .story-field:has([aria-label="节拍内容"]) textarea,.studio-edit-layout .story-field:has([aria-label="剧本正文"]) textarea { background:color-mix(in srgb,var(--bg-panel) 96%,var(--text) 4%); }
 .studio-help { pointer-events:auto; }
@@ -195,18 +195,53 @@
 .story-document-library > div { border: 1px solid #ffffff18; padding: 12px; border-radius: 6px; margin-block: 8px; }
 .story-document-library details { padding-block: 8px; }
 
-.story-structure-panel { border: 1px solid #ffffff18; border-radius: 6px; padding: 10px 12px; margin-bottom: 14px; }
-.story-structure-panel > summary { cursor: pointer; font-size: 13px; font-weight: 600; }
-.story-structure-panel summary small { color: #99a3a5; margin-left: 8px; font-weight: normal; }
-.story-structure-create { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-block: 12px; }
-.story-structure-panel label { display: grid; gap: 6px; font-size: 12px; }
-.story-structure-panel input, .story-structure-panel select { background: #242628; border: 1px solid #ffffff18; border-radius: 5px; padding: 7px 9px; color: inherit; max-width: 100%; }
-.story-structure-assign { margin-block: 10px; }
-.story-structure-groups > details { border-top: 1px solid #ffffff12; padding-block: 9px; }
-.story-structure-groups > details > summary { cursor: pointer; }
-.story-scene-number { max-width: 360px; margin-top: 12px; }
 .story-stable-number { color: #94cce4; font-variant-numeric: tabular-nums; }
 .studio-nav-number { min-width: 28px; overflow-wrap: anywhere; }
 .story-group-path { color: #94cce4; font-size: 12px; }
-.studio-nav-group > summary { padding: 12px 8px 8px; font-size: 11px; color: #9ca6a8; cursor: pointer; }
-.story-structure-panel .studio-field-hint { margin: 8px 0; line-height: 1.6; }
+
+/* The outline owns organization; the writing canvas stays focused on content. */
+.story-outline button { cursor: pointer; }
+.outline-create-actions { display:flex; gap:6px; padding:0 12px 12px; }
+.outline-create-actions button,.outline-current button { display:inline-flex; align-items:center; gap:4px; padding:5px 8px; font-size:11px; border:1px solid var(--line); border-radius:5px; }
+.story-outline .studio-navigator-scroll { padding-inline:8px; }
+.outline-folder { border:1px solid transparent; border-radius:6px; margin-bottom:5px; }
+.outline-folder.is-child { margin-left:12px; border-left-color:var(--line); }
+.outline-folder-heading { display:flex; align-items:center; min-height:34px; gap:2px; }
+.story-outline .outline-folder-toggle { flex:1; min-width:0; margin:0; padding:8px 4px; align-items:center; gap:5px; font-size:12px; border:0; }
+.outline-folder-toggle > span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.outline-folder-toggle > small { color:var(--text-muted); font-size:10px; }
+.story-outline .outline-icon,.story-outline .outline-more { flex:0 0 auto; width:24px; height:26px; margin:0; padding:4px; align-items:center; justify-content:center; border:0; color:var(--text-muted); }
+.story-outline .outline-icon:hover,.story-outline .outline-more:hover { background:var(--bg-field); color:var(--text); }
+.outline-clip { position:relative; }
+.story-outline .outline-select { padding:9px 25px 9px 4px; gap:4px; cursor:grab; }
+.story-outline .outline-select:active { cursor:grabbing; }
+.outline-number { min-width:30px; color:#94cce4; font-size:11px; line-height:20px; overflow-wrap:anywhere; }
+.outline-grip { flex:0 0 auto; margin-top:4px; color:var(--text-muted); opacity:.45; }
+.outline-clip .outline-more { position:absolute; top:7px; right:1px; }
+.outline-membership { color:var(--accent) !important; font-size:10px !important; overflow-wrap:anywhere; }
+.outline-folder.is-drop-target { border-color:var(--accent); background:color-mix(in srgb,var(--accent) 12%,transparent); }
+.outline-clip.is-dragging { opacity:.45; }
+.outline-empty-drop { color:var(--text-muted); font-size:11px; line-height:1.7; padding:6px 12px 12px; }
+.outline-menu { display:grid; border:1px solid var(--line); border-radius:5px; padding:4px; margin:2px 4px 8px; background:var(--bg-field); }
+.story-outline .outline-menu button { padding:6px 8px; margin:0; border:0; font-size:11px; }
+.outline-inline-form { display:grid; gap:8px; margin:0 10px 12px; padding:10px; border:1px solid var(--line); border-radius:6px; font-size:12px; }
+.outline-inline-form label { display:grid; gap:6px; }
+.outline-inline-form input,.outline-inline-form select,.outline-current input { width:100%; min-width:0; background:var(--bg-field); border:1px solid var(--line); border-radius:4px; padding:7px 8px; font-size:12px; }
+.outline-inline-form > div,.outline-current > div { display:flex; flex-wrap:wrap; gap:6px; }
+.outline-inline-form button { padding:5px 7px; font-size:11px; border:1px solid var(--line); border-radius:4px; }
+.outline-inline-form small { color:var(--text-muted); }
+.outline-current { display:grid; gap:6px; padding:12px; border-top:1px solid var(--line); font-size:11px; }
+.outline-current > strong { font-size:12px; font-weight:500; }
+.outline-current > span { color:var(--accent); overflow-wrap:anywhere; }
+.outline-current form { display:flex; gap:5px; }
+.outline-current input { flex:1; }
+.outline-current form button { flex-shrink:0; }
+.outline-feedback { padding:6px 12px; font-size:11px; color:var(--accent); line-height:1.6; }
+.outline-feedback.is-error { color:var(--err); }
+.story-outline .outline-select { user-select:none; }
+/* Let native dragging start on the row, including when grabbing its icon or text. */
+.story-outline .outline-select > * { pointer-events:none; }
+.story-outline .outline-select { display:flex; width:100%; align-items:flex-start; text-align:left; border-left:2px solid transparent; border-radius:4px; margin-bottom:4px; }
+.story-outline .outline-select:hover { background:var(--bg-field); }
+.story-outline .outline-select[aria-current=true] { border-left-color:var(--accent); background:var(--bg-selected); }
+.story-outline .outline-select:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }

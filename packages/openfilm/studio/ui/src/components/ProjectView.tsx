@@ -655,7 +655,7 @@ export function ProjectView({ projectId, onProject }: {
       const original = track.docIndex === undefined ? undefined : film.film.tracks[track.docIndex];
       const storyKind = original?.attrs?.['data-story-track'];
       if (storyKind === 'scene' || storyKind === 'beat' || storyKind === 'shot') {
-        track.name = storyKind === 'scene' ? '场次划分' : original?.attrs?.title ?? track.name;
+        track.name = storyKind === 'scene' ? '场次' : original?.attrs?.title ?? track.name;
         track.storyKind = storyKind;
       }
       for (const block of track.blocks) {
@@ -5950,13 +5950,13 @@ export function ProjectView({ projectId, onProject }: {
                     blockMenuExtra={timelineMenuExtra}
                     onAddStoryTrack={!loaded?.outer ? async name => {
                       const at = value.tracks.findIndex(track => track.attrs?.['data-story-track'] === 'scene');
-                      return edit([{ op: 'story-track-add', id: crypto.randomUUID(), name, at: at < 0 ? 0 : at }], '新增故事线轨道');
+                      return edit([{ op: 'story-track-add', id: crypto.randomUUID(), name, at: at < 0 ? 0 : at }], '新增故事线');
                     } : undefined}
                     storyBeatIds={new Set(value.tracks.flatMap(track => track.clips.filter(clip => storyData(clip)?.kind === 'beat').map(clip => clip.id)))}
                     onStoryLink={id => {
                       const ops = storyLinkOps(value, id);
-                      if (ops.length) void edit(ops, '切换节拍场次关联');
-                      else toast.show('节拍起点处没有可关联的场次。');
+                      if (ops.length) void edit(ops, '切换故事卡场次关联');
+                      else toast.show('故事卡起点处没有可关联的场次。');
                     }}
                     chat={timelineChat}
                     {...(hostHover ? { onHoverBlock: hoverBlock } : {})}

@@ -94,21 +94,21 @@ export function StoryOverview({projectId,film,outer,mediaBase,projectName,focuse
   const partOf=(scene:Clip)=>{const folder=storyPartFolder(scene);return folder===activePart?{film}:folder?parts.get(folder):undefined;};
   const shotCount=scenes.reduce((count,scene)=>count+(partOf(scene)?.film?storyShots(partOf(scene)!.film!).length:0),0);
   return <div className="story-overview" aria-label="全片剧本与分镜总览" ref={viewport} onScroll={()=>{if(restored.current&&storyPreference(projectId)?.view==='overview')remember();}}>
-    <header className="story-overview-head"><div><h2>全片总览 · {root.name}</h2><p>{beatEntries(root.film).length} 个节拍 · {scenes.length} 场 · {shotCount} 镜{loading?' · 正在读取镜头':''}</p></div>
+    <header className="story-overview-head"><div><h2>全片总览 · {root.name}</h2><p>{beatEntries(root.film).length} 个故事卡 · {scenes.length} 场 · {shotCount} 镜{loading?' · 正在读取镜头':''}</p></div>
       <div className="story-actions"><button onClick={()=>viewport.current?.querySelector('#story-reading')?.scrollIntoView({block:'start'})}>剧本串读</button><button onClick={()=>viewport.current?.querySelector('#story-boards')?.scrollIntoView({block:'start'})}>分镜总览</button><button onClick={()=>setRefresh(value=>value+1)}>刷新分镜</button></div>
       <p className="story-overview-location" role="status">当前轨道：{outer?`场内镜头 · ${scenes.find(scene=>storyPartFolder(scene)===activePart)&&storyData(scenes.find(scene=>storyPartFolder(scene)===activePart)!)?.title||projectName}`:'全片剧本与场次'}{focusedId?' · 已定位所选片段':''}。点击内容定位，编辑按钮进入原编辑器。</p>
       {(error||rootError)&&<p role="alert">{error||rootError}</p>}
     </header>
     <section id="story-reading" className="story-reading" aria-label="全片剧本串读">
-      <div className="story-overview-section-title"><h2>剧本串读</h2><label>剧本线<select aria-label="串读剧本线" value={line} onChange={e=>setLine(e.target.value)}><option value="">全部剧本线</option>{lines.map(name=><option key={name}>{name}</option>)}</select></label></div>
-      <p className="story-overview-hint">按全片呈现时间阅读；同起点的不同剧本线并列展示，正文保留原有段落。</p>
-      {!groups.length&&<p>尚无节拍正文。旧版场次正文仍保留在下方对应场次。</p>}
+      <div className="story-overview-section-title"><h2>剧本串读</h2><label>故事线<select aria-label="串读故事线" value={line} onChange={e=>setLine(e.target.value)}><option value="">全部故事线</option>{lines.map(name=><option key={name}>{name}</option>)}</select></label></div>
+      <p className="story-overview-hint">按全片呈现时间阅读；同起点的不同故事线并列展示，正文保留原有段落。</p>
+      {!groups.length&&<p>尚无故事卡正文。旧版场次正文仍保留在下方对应场次。</p>}
       {groups.map(group=><div className="story-reading-group" key={group.at}><span className="story-reading-time">{storyTime(group.at)}</span><div className="story-reading-parallel">{group.entries.map(({clip,line})=><article key={clip.id} data-overview-anchor={`beat:${clip.id}`} data-overview-beat={clip.id} className={projectId===root.id&&focusedId===clip.id?'is-located':''}>
         <button className="story-reading-content" aria-label={`定位正文 · ${line} · ${storyData(clip)?.title}`} onClick={()=>void locate(clip)}><span className="story-reading-line">{line} · {storyTime(clip.at??0)}—{storyTime(clipEnd(clip))}</span><strong>{storyData(clip)?.title}</strong><span className="story-overview-body">{storyData(clip)?.description||'尚未填写正文'}</span></button>
         <button className="story-overview-edit" onClick={()=>void locate(clip,undefined,'script')} aria-label={`编辑正文 · ${storyData(clip)?.title}`}>编辑正文</button>
       </article>)}</div></div>)}
     </section>
-    <section id="story-boards" className="story-boards" aria-label="全片分镜总览"><h2>场次与分镜</h2><label>结构分组<select aria-label="总览结构分组" value={structureFilter} onChange={e=>setStructureFilter(e.target.value)}><option value="">全部幕与序列</option>{structureGroups(root.film).map(g=><option key={g.id} value={g.id}>{storyGroupPath(root.film,g.id)}</option>)}<option value="__ungrouped">未分组</option></select></label>
+    <section id="story-boards" className="story-boards" aria-label="全片分镜总览"><h2>场次与分镜</h2><label>结构分组<select aria-label="总览结构分组" value={structureFilter} onChange={e=>setStructureFilter(e.target.value)}><option value="">全部幕与序列</option>{structureGroups(root.film).map(g=><option key={g.id} value={g.id}>{storyGroupPath(root.film,g.id)}</option>)}<option value="__ungrouped">未归组</option></select></label>
       {!scenes.length&&<p>{structureFilter?'此分组暂无场次。':'尚未划分场次。剧本内容可先独立串读。'}</p>}
       {scenes.map((scene)=>{
         const data=storyData(scene)!,part=partOf(scene),shots=part?.film?storyShots(part.film):[];
@@ -131,7 +131,7 @@ export function StoryOverview({projectId,film,outer,mediaBase,projectName,focuse
                 <span className="story-overview-hint">场内 {storyTime(shot.at??0)} · {(clipEnd(shot)-(shot.at??0)).toFixed(1)} 秒{projection.globalStart!==null?` · 全片 ${storyTime(projection.globalStart)}`:' · 超出场次排期'}{projection.clipped?' · 场次使用局部':''}</span>
                 <span className="story-overview-body">{shotData.description||'尚未填写镜头描述'}</span><span>{[shotData.framing,shotData.movement].filter(Boolean).join(' · ')}</span>
               </button>
-              <p className="story-overview-shot-beats">关联节拍：{shotBeatIds(shot).map(id=>allBeats.get(id)?storyData(allBeats.get(id)!.clip)?.title:`已删除 · ${id}`).join(' / ')||'尚未关联'}</p>
+              <p className="story-overview-shot-beats">关联故事卡：{shotBeatIds(shot).map(id=>allBeats.get(id)?storyData(allBeats.get(id)!.clip)?.title:`已删除 · ${id}`).join(' / ')||'尚未关联'}</p>
               {shotData.notes&&<details><summary>镜头备注</summary><p className="story-overview-body">{shotData.notes}</p></details>}
               <button className="story-overview-edit" aria-label={`编辑分镜 · ${data.title} · ${shotData.title}`} onClick={()=>void locate(shot,scene,'board')}>编辑分镜</button>
             </section>;

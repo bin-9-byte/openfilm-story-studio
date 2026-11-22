@@ -13,11 +13,11 @@ export function initializeStructure(film:Film):Op[] {
   return [structureOp(structureOf(film))];
 }
 export function sceneNumber(film:Film,scene:Clip):string {
-  return film.storyStructure?.sceneNumbers[scene.id]??'未固定';
+  return film.storyStructure?.sceneNumbers[scene.id]??'未编号';
 }
 export function storyGroupPath(film:Film,id?:string):string {
   const groups=film.storyStructure?.groups??[],group=groups.find(g=>g.id===id);
-  if(!group)return '未分组';
+  if(!group)return '未归组';
   const parent=groups.find(g=>g.id===group.parentId);
   return parent?`${parent.title} / ${group.title}`:group.title;
 }
@@ -42,7 +42,7 @@ export function removeStoryGroup(film:Film,id:string):Op[] {
 }
 export function assignStoryGroup(film:Film,ids:readonly string[],groupId:string):Op[] {
   const value=structureOf(film),clips=film.tracks.flatMap(t=>t.clips).filter(c=>ids.includes(c.id)&&['scene','beat'].includes(storyData(c)?.kind??''));
-  if(!clips.length)throw new Error('请先选择剧本节拍或场次。');
+  if(!clips.length)throw new Error('请先选择剧本故事卡或场次。');
   for(const clip of clips){if(groupId)value.members[clip.id]=groupId;else delete value.members[clip.id];}
   return [structureOp(value)];
 }
@@ -55,11 +55,12 @@ export function reorderStoryGroup(film:Film,id:string,direction:-1|1):Op[] {
 export function setSceneNumber(film:Film,scene:Clip,number:string):Op[] {
   const value=structureOf(film),numbered={...film,storyStructure:value};ensureSceneNumbers(numbered);
   number=number.trim();if(!number)throw new Error('场号不能为空。');
+  if(Object.entries(value.sceneNumbers).some(([id,existing])=>id!==scene.id&&existing.toUpperCase()===number.toUpperCase()))throw new Error(`场号「${number}」已使用过，请换一个场号。`);
   value.sceneNumbers[scene.id]=number;return [structureOp(value)];
 }
 export function groupedStoryClips(film:Film,clips:Clip[]) {
   const members=film.storyStructure?.members??{};
   const groups=structureGroups(film).map(group=>({id:group.id,title:storyGroupPath(film,group.id),clips:clips.filter(clip=>members[clip.id]===group.id)}));
   const ungrouped=clips.filter(clip=>!groups.some(group=>group.id===members[clip.id]));
-  return [...groups,...(ungrouped.length?[{id:'',title:'未分组',clips:ungrouped}]:[])];
+  return [...groups,...(ungrouped.length?[{id:'',title:'未归组',clips:ungrouped}]:[])];
 }

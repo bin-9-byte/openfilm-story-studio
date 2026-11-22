@@ -3153,10 +3153,10 @@ export const Timeline = React.memo(function Timeline({
           {/* its name as editors number tracks: no title of its own */}
           {track.storyKind
             ? <span className="grid min-w-0 gap-1 text-[11px] font-medium" style={{ color: track.storyKind === 'scene' ? '#94cce4' : track.storyKind === 'shot' ? '#d8c293' : '#c7b4e6' }}>
-                <span className="truncate">{track.name ?? (track.storyKind === 'scene' ? '场次划分' : track.storyKind === 'shot' ? '场内镜头' : '故事线')}</span>
+                <span className="truncate">{track.name ?? (track.storyKind === 'scene' ? '场次' : track.storyKind === 'shot' ? '场内镜头' : '故事线')}</span>
                 <small className="truncate text-[9px] font-normal text-[var(--text-muted)]">
                   {track.storyKind === 'scene' ? '引用剧本 · 包含分镜' : track.storyKind === 'shot' ? '本场镜头'
-                    : track.index > 1 ? `同一故事线 · 重叠显示 ${track.index}` : '故事节拍'}
+                    : track.index > 1 ? `同一故事线 · 重叠显示 ${track.index}` : '故事卡'}
                 </small>
               </span>
             : <LaneMark track={track} />}
@@ -3716,7 +3716,7 @@ export const Timeline = React.memo(function Timeline({
                     {block.storySceneNumber&&<span data-block-scene-number={block.storySceneNumber} className="shrink-0 text-[10px] font-semibold text-white/90">{block.storySceneNumber}</span>}
                     {block.clipId && storyBeatIds?.has(block.clipId) && <button
                       type="button" aria-label={`场次关联 · ${block.title}`} aria-pressed={Boolean(links?.has(block.clipId))}
-                      title={links?.has(block.clipId) ? '跟随场次，点击解除关联' : '独立节拍，点击关联起点所在场次'}
+                      title={links?.has(block.clipId) ? '跟随场次，点击解除关联' : '独立故事卡，点击关联起点所在场次'}
                       disabled={track.locked}
                       className="pointer-events-auto flex shrink-0 items-center rounded px-0.5 text-white/80 hover:bg-black/30"
                       onPointerDown={event => event.stopPropagation()}
@@ -4567,7 +4567,7 @@ export const Timeline = React.memo(function Timeline({
       }}
     >
       {/* ── Toolbar: mode (select / split) · undo / redo / history · split · status · the switches · zoom · subtitles ── */}
-      {addingStoryTrack && <form role="dialog" aria-label="新增故事线轨道"
+      {addingStoryTrack && <form role="dialog" aria-label="新增故事线"
         className="absolute left-2 top-10 z-50 grid gap-3 rounded-lg border border-[var(--line)] bg-[var(--bg-raised)] p-4 text-[12px] shadow-xl"
         onKeyDown={event => { event.stopPropagation(); if (event.key === 'Escape') setAddingStoryTrack(false); }}
         onSubmit={async event => {
@@ -4596,7 +4596,7 @@ export const Timeline = React.memo(function Timeline({
         style={{ background: TL.head, borderColor: TL.line }}
       >
         {onAddStoryTrack && <button type="button" className="flex shrink-0 items-center gap-1 rounded px-2 py-1 text-[11px] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
-          aria-expanded={addingStoryTrack} onClick={() => { setStoryTrackError(''); setAddingStoryTrack(value => !value); }}><Plus size={13} />新增故事线轨道</button>}
+          aria-expanded={addingStoryTrack} onClick={() => { setStoryTrackError(''); setAddingStoryTrack(value => !value); }}><Plus size={13} />新增故事线</button>}
         {onSplit && !layers ? <>
           <ModePicker mode={mode} onPick={setMode} />
           <span className="mx-0.5 h-4 w-px" style={{ background: TL.toolbarDivider }} />

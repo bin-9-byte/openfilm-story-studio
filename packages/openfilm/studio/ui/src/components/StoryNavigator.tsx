@@ -1,34 +1,19 @@
 import * as React from 'react';
-import type {Clip,Film} from '@/api';
+import type {Clip,Film,Op} from '@/api';
 import {clipEnd,storyData} from '@/lib/story-content';
-import {groupedStoryClips,sceneNumber} from '@/lib/story-structure';
 import {storyTime} from '@/lib/story-overview';
+import {StoryOutline} from './StoryOutline';
 
-export function StoryNavigator({film,kind,selectedId,onSelect}:{film:Film;kind:'beat'|'scene'|'shot';selectedId?:string;onSelect(clip:Clip):void}) {
+type Props={projectId:string;film:Film;kind:'beat'|'scene'|'shot';selectedId?:string;selectedIds:readonly string[];onSelect(clip:Clip):void;currentFilm():Film;settle():Promise<void>;write(ops:Op[],label:string):Promise<string|null>};
+export function StoryNavigator(props:Props) {
+  return props.kind==='shot'?<ShotNavigator {...props}/>:<StoryOutline {...props} kind={props.kind}/>;
+}
+function ShotNavigator({film,selectedId,onSelect}:Props) {
   const ref=React.useRef<HTMLDivElement>(null);
-  const trackGroups=film.tracks.flatMap((track,index)=>{
-    const clips=track.clips.filter(clip=>storyData(clip)?.kind===kind).sort((a,b)=>(a.at??0)-(b.at??0));
-    return clips.length?[{id:index,title:track.attrs?.title??(kind==='scene'?'场次划分':kind==='shot'?'本场镜头':'剧本线'),clips}]:[];
-  });
-  const groups=kind!=='shot'&&film.storyStructure?.groups.length
-    ? groupedStoryClips(film,trackGroups.flatMap(g=>g.clips).sort((a,b)=>(a.at??0)-(b.at??0)))
-    :trackGroups;
-  const label=kind==='beat'?'节拍':kind==='scene'?'场次':'镜头';
-  React.useEffect(()=>{
-    const scroll=ref.current;if(!scroll)return;
-    const reveal=()=>{const item=scroll.querySelector('[aria-current="true"]');if(!item)return;const parent=item.closest('details');if(parent)parent.open=true;const bounds=item.getBoundingClientRect(),view=scroll.getBoundingClientRect();if(bounds.bottom>view.bottom)scroll.scrollTop+=bounds.bottom-view.bottom+8;else if(bounds.top<view.top)scroll.scrollTop-=view.top-bounds.top+8;};
-    let frame=requestAnimationFrame(()=>{frame=requestAnimationFrame(reveal);});
-    const observer=new ResizeObserver(reveal);observer.observe(scroll);
-    return()=>{cancelAnimationFrame(frame);observer.disconnect();};
-  },[selectedId]);
-  return <aside className="studio-navigator" aria-label={`${label}目录`}>
-    <div className="studio-navigator-heading"><h2>{label}列表</h2><span>{groups.reduce((n,g)=>n+g.clips.length,0)}</span></div>
-    <div className="studio-navigator-scroll" ref={ref}>
-      {!groups.length&&<p className="studio-nav-empty">{kind==='scene'?'选中剧本节拍或时间选区，再划分场次':kind==='shot'?'点击右上角新增镜头':'点击右上角新增节拍，开始写故事'}</p>}
-      {groups.map(group=><details open key={group.id} className="studio-nav-group"><summary title={group.title}>{group.title} · {group.clips.length}</summary>{group.clips.map((clip,index)=><button key={clip.id} aria-label={`选择${label} · ${storyData(clip)?.title}`} aria-current={selectedId===clip.id?'true':undefined} onClick={()=>onSelect(clip)}>
-        <span className="studio-nav-number">{kind==='scene'?sceneNumber(film,clip):String(index+1).padStart(2,'0')}</span><span className="studio-nav-copy"><strong>{storyData(clip)?.title}</strong><small>{kind==='beat'&&film.storyStructure?.groups.length?`${film.tracks.find(t=>t.clips.some(c=>c.id===clip.id))?.attrs?.title??'剧本线'} · `:''}{storyTime(clip.at??0)} · {(clipEnd(clip)-(clip.at??0)).toFixed(1)} 秒</small></span>
-      </button>)}</details>)}
-    </div>
-    <p className="studio-navigator-foot">{kind==='beat'?'先写故事，再划分场次':kind==='scene'?'场次引用正文，镜头承接表达':'每个镜头都可以关联故事节拍'}</p>
-  </aside>;
+  const clips=film.tracks.flatMap(t=>t.clips).filter(c=>storyData(c)?.kind==='shot').sort((a,b)=>(a.at??0)-(b.at??0));
+  React.useEffect(()=>{const frame=requestAnimationFrame(()=>ref.current?.querySelector('[aria-current="true"]')?.scrollIntoView({block:'nearest'}));return()=>cancelAnimationFrame(frame);},[selectedId]);
+  return <aside className="studio-navigator" aria-label="镜头目录"><div className="studio-navigator-heading"><h2>镜头</h2><span>{clips.length}</span></div><div className="studio-navigator-scroll" ref={ref}>
+    {!clips.length&&<p className="studio-nav-empty">点击右上角「新增镜头」开始设计画面。</p>}
+    {clips.map((clip,index)=><button key={clip.id} aria-label={`选择镜头 · ${storyData(clip)?.title}`} aria-current={selectedId===clip.id?'true':undefined} onClick={()=>onSelect(clip)}><span className="studio-nav-number">{String(index+1).padStart(2,'0')}</span><span className="studio-nav-copy"><strong>{storyData(clip)?.title}</strong><small>{storyTime(clip.at??0)} · {(clipEnd(clip)-(clip.at??0)).toFixed(1)} 秒</small></span></button>)}
+  </div><p className="studio-navigator-foot">每个镜头都可以引用故事正文。</p></aside>;
 }

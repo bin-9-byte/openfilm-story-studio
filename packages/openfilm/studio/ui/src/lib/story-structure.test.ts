@@ -51,5 +51,5 @@ test('structure, numbers and membership roundtrip alongside screenplay through l
  const text=filmHtml(film,'<section></section>'),read=readFilmFile(text);assert.deepEqual(read.problems,[]);assert.deepEqual(read.value.storyStructure,film.storyStructure);assert.deepEqual(read.value.screenplay,film.screenplay);assert.equal(filmHtml(read.value,text),text);
  assert.throws(()=>addStoryGroup(film,{id:'bad',kind:'sequence',title:'孤立',parentId:'unknown'}));
  assert.throws(()=>changeStoryGroup(film,'a',{parentId:'a'}));
- const groups=groupedStoryClips(film,film.tracks[0].clips);assert.equal(groups[0].clips[0].id,'s1');assert.equal(groups[1].title,'未分组');
+ const groups=groupedStoryClips(film,film.tracks[0].clips);assert.equal(groups[0].clips[0].id,'s1');assert.equal(groups[1].title,'未归组');
 });
