@@ -17,6 +17,6 @@ export default defineConfig(({mode}) => ({
   build: {
     outDir: mode==='browser'?'dist-browser':'dist', emptyOutDir: true, target: 'es2022', sourcemap: false,
     /* a workbench's entry keeps what it exports (its element): it is imported by name, from outside the build */
-    rollupOptions: { preserveEntrySignatures: 'exports-only', input: { main: at('./index.html'), ...workbenchInputs(),...(mode==='browser'?{'browser-sw':at('./src/browser/service-worker.ts')}:{}) },output:{entryFileNames:chunk=>chunk.name==='browser-sw'?'browser-sw.js':'assets/[name]-[hash].js'} },
+    rollupOptions: { preserveEntrySignatures: 'exports-only', input: { main: at('./index.html'), ...Object.fromEntries(Object.entries(workbenchInputs()).filter(([name])=>mode!=='browser'||!name.startsWith('workbench-')||name==='workbench-edit')),...(mode==='browser'?{'browser-sw':at('./src/browser/service-worker.ts')}:{}) },output:{entryFileNames:chunk=>chunk.name==='browser-sw'?'browser-sw.js':'assets/[name]-[hash].js'} },
   },
 }));

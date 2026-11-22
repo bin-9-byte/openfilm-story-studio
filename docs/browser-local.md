@@ -14,7 +14,9 @@ pnpm --filter openfilm exec vite preview --config studio/ui/vite.config.ts --mod
 
 在 Vercel 导入 `bin-9-byte/openfilm-story-studio`，根目录保持仓库根目录。根目录 `vercel.json` 已指定安装命令、浏览器版构建命令、静态输出目录、工程路由回退及 Service Worker 的缓存头。不需要云数据库、服务端密钥或 Vercel Functions。
 
-首次需要联网加载约 9 MB 应用资源。界面出现“离线就绪”后可以断网刷新、从已访问的工程网址打开、关闭浏览器后重开，并继续创作。新版本准备好后提供“保存并更新”，不会在写作中自动刷新。
+正式网址：https://openfilm-story-studio.vercel.app/
+
+首次联网安装仅预缓存编辑器所需的 39 项资源（约 5.5 MB 未压缩，传输会压缩），显示下载进度；内置教程预览图、视频等在使用后缓存，用户工程素材独立存入 IndexedDB。界面出现“离线就绪”后可以断网刷新、从已访问的工程网址打开、关闭浏览器后重开，并继续创作。新版本准备好后提供“保存并更新”，不会在写作中自动刷新。
 
 ## 使用
 

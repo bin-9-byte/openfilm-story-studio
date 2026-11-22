@@ -40,7 +40,7 @@ export function App() {
   /* The launcher is usable first. Without a project, warm the board's code for the examples' canvas previews; a
      project's page warms its canvas itself (shell/workbenches), after the edit has loaded. */
   const home = id == null;
-  useEffect(() => (home ? afterPaintIdle(() => { void loadCanvas().catch(() => {}); }) : undefined), [home]);
+  useEffect(() => (home&&!BROWSER_LOCAL ? afterPaintIdle(() => { void loadCanvas().catch(() => {}); }) : undefined), [home]);
 
   useEffect(() => {
     const onPop = () => setPath(location.pathname);
@@ -78,7 +78,7 @@ export function App() {
           <ProjectsPopover open currentProjectId="" onOpen={(next) => go(`/projects/${next}`)} onCurrentRemoved={() => {}} />
         </div>
       );
-  return <>{page}<ConnectionNotice /><WhatsNew />{BROWSER_LOCAL&&<BrowserUpdate/>}</>;
+  return <>{page}<ConnectionNotice />{!BROWSER_LOCAL&&<WhatsNew />}{BROWSER_LOCAL&&<BrowserUpdate/>}</>;
 }
 
 /**

@@ -17,7 +17,8 @@ export function browserBuild():Plugin {
         const entries=await readdir(dir,{withFileTypes:true});
         return (await Promise.all(entries.map(e=>e.isDirectory()?walk(join(dir,e.name)):Promise.resolve([join(dir,e.name)])))).flat();
       };
-      const files=(await walk(output)).map(path=>'/'+path.slice(output.length+1).replaceAll('\\','/')).filter(path=>path!=='/browser-sw.js'&&path!=='/browser-precache.json'&&!path.endsWith('.map'));
+      // Tutorial/style-gallery videos and posters are optional, not startup dependencies.
+      const files=(await walk(output)).map(path=>'/'+path.slice(output.length+1).replaceAll('\\','/')).filter(path=>path!=='/browser-sw.js'&&/\.(?:html|js|css|woff2?|svg|webmanifest)$/.test(path));
       await writeFile(join(output,'browser-precache.json'),JSON.stringify({files}));
     },
   };
