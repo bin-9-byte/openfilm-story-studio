@@ -347,6 +347,7 @@ export type TimelineBlockKind = 'mg' | 'video' | 'voice' | 'sfx' | 'music' | 'ca
 export interface TimelineBlock {
   id: string;
   storyIndependent?: boolean;
+  storySceneNumber?: string;
   title: string;
   generation?: 'running' | 'failed';
   /** The library's text (isLibraryText): the words it says, as its overrides set them; absent when they are its own. */

@@ -194,3 +194,19 @@
 .story-source-choice input[type=checkbox] { flex: 0 0 auto; width: auto; margin-top: 3px; }
 .story-document-library > div { border: 1px solid #ffffff18; padding: 12px; border-radius: 6px; margin-block: 8px; }
 .story-document-library details { padding-block: 8px; }
+
+.story-structure-panel { border: 1px solid #ffffff18; border-radius: 6px; padding: 10px 12px; margin-bottom: 14px; }
+.story-structure-panel > summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+.story-structure-panel summary small { color: #99a3a5; margin-left: 8px; font-weight: normal; }
+.story-structure-create { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-block: 12px; }
+.story-structure-panel label { display: grid; gap: 6px; font-size: 12px; }
+.story-structure-panel input, .story-structure-panel select { background: #242628; border: 1px solid #ffffff18; border-radius: 5px; padding: 7px 9px; color: inherit; max-width: 100%; }
+.story-structure-assign { margin-block: 10px; }
+.story-structure-groups > details { border-top: 1px solid #ffffff12; padding-block: 9px; }
+.story-structure-groups > details > summary { cursor: pointer; }
+.story-scene-number { max-width: 360px; margin-top: 12px; }
+.story-stable-number { color: #94cce4; font-variant-numeric: tabular-nums; }
+.studio-nav-number { min-width: 28px; overflow-wrap: anywhere; }
+.story-group-path { color: #94cce4; font-size: 12px; }
+.studio-nav-group > summary { padding: 12px 8px 8px; font-size: 11px; color: #9ca6a8; cursor: pointer; }
+.story-structure-panel .studio-field-hint { margin: 8px 0; line-height: 1.6; }

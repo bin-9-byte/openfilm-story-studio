@@ -7,14 +7,16 @@
 import { FILM_FILE, clipFade, clipIdFor, clipKind, clipSpeed, kindOf } from '../../src/film-doc.mjs';
 import { KEYED_PROPS, animationsOf, motionName, readMotion, shiftMotion, withAnimations, writeMotion } from '../../src/clip-motion.mjs';
 import { plainTrack } from './track-layout.mjs';
+import {ensureSceneNumbers,validStoryStructure} from '../../src/story-structure.mjs';
 import { packStoryTracks } from '../../src/story-sequence.mjs';
 
 /** @typedef {{ src: string, id: string, [field: string]: unknown }} Clip */
 /** @typedef {{ src: string, kind?: 'captions' | 'subtitles', srclang?: string, label?: string }} TrackCaptions */
 /** @typedef {{ clips: Clip[], locked?: boolean, hidden?: boolean, muted?: boolean, attrs?: Record<string, string>, captions?: TrackCaptions }} Track */
-/** @typedef {{ stage?: { w: number, h: number }, tracks: Track[], screenplay?: Record<string, {title: string, blocks: {id:string,text:string}[]}>, keyframes?: Record<string, string> }} FilmValue */
+/** @typedef {{ stage?: { w: number, h: number }, tracks: Track[], storyStructure?: import('../../src/story-structure.mjs').StoryStructure, screenplay?: Record<string, {title: string, blocks: {id:string,text:string}[]}>, keyframes?: Record<string, string> }} FilmValue */
 /**
  * @typedef {(
+ *   | { op: 'story-structure', value: import('../../src/story-structure.mjs').StoryStructure | null }
  *   | { op: 'screenplay', set: Record<string, {title:string,blocks:{id:string,text:string}[]} | null> }
  *   | { op: 'story-pack' }
  *   | { op: 'story-track-add', id: string, name: string, at: number, kind?: 'beat' | 'scene' }
@@ -196,6 +198,7 @@ export function applyOps(value, ops) {
           for (const [prop, v] of Object.entries(op.left ?? {})) setField(left, prop, snapTime(prop, v));
           for (const [prop, v] of Object.entries(op.right ?? {})) setField(right, prop, snapTime(prop, v));
           splitMotion(value, clip, right);
+          if(value.storyStructure?.members[clip.id])value.storyStructure.members[right.id]=value.storyStructure.members[clip.id];
           value.tracks[t].clips.splice(c, 1, left, right);
           break;
         }
@@ -207,6 +210,7 @@ export function applyOps(value, ops) {
         splitMotion(value, clip, rest);
         clip.time = op.time;
         splitFades(clip, rest);
+        if(value.storyStructure?.members[clip.id])value.storyStructure.members[rest.id]=value.storyStructure.members[clip.id];
         value.tracks[t].clips.splice(c + 1, 0, rest);
         break;
       }
@@ -216,6 +220,11 @@ export function applyOps(value, ops) {
         if (!track) throw new EditError(`no track ${op.track}`, 'conflict');
         if (op.value) track[op.field] = true;
         else delete track[op.field];
+        break;
+      }
+      case 'story-structure': {
+        if(op.value===null)delete value.storyStructure;
+        else {if(!validStoryStructure(op.value))throw new EditError('Invalid story structure or duplicate scene number', 'invalid');value.storyStructure=structuredClone(op.value);}
         break;
       }
       case 'screenplay': {
@@ -323,6 +332,7 @@ export function applyOps(value, ops) {
   fitClipLengths(value);
   ownMotion(value);
   if (!hadKeyframes && value.keyframes && !Object.keys(value.keyframes).length) delete value.keyframes;
+  ensureSceneNumbers(value);
   return value;
 }
 

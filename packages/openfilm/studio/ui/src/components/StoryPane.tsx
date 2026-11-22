@@ -10,6 +10,8 @@ import { StoryNavigator } from './StoryNavigator';
 import { StoryHelp, type HelpAction } from './StoryHelp';
 import { storyTime } from '@/lib/story-overview';
 import { SceneReferences, ShotBeatLinks } from './StoryReferences';
+import {StoryStructurePanel} from './StoryStructure';
+import {initializeStructure,sceneNumber,storyGroupPath} from '@/lib/story-structure';
 import { StoryContentEditor, StoryDocumentLibrary } from './StoryContentEditor';
 import { SceneTiming } from './StoryTiming';
 import { importStoryImage, storedStoryImage, storyImageUrl } from '@/lib/story-media';
@@ -76,8 +78,8 @@ export function StoryPane({ projectId, film, outer, focusedId, selectedIds, time
       const current = ++generation;
       try {
         const parent = await api.film(outer.id);
-        const scene = parent.value?.tracks.flatMap(track => track.clips).find(clip =>
-          clip.src.replace(/#.*$/, '') === `parts/${outer.folder}/film.html` && storyData(clip)?.kind === 'scene');
+        const candidates=parent.value?.tracks.flatMap(track=>track.clips).filter(clip=>clip.src.replace(/#.*$/, '')===`parts/${outer.folder}/film.html`&&storyData(clip)?.kind==='scene')??[];
+        const scene=candidates.find(clip=>clip.id===rememberedStoryLocation(outer.id)?.clipId)??candidates[0];
         if (active && generation === current) {
           setOuterContext(parent.value && scene ? { film: parent.value, scene } : null);
           setContextError(scene ? '' : '未找到所属场次。');
@@ -241,7 +243,7 @@ export function StoryPane({ projectId, film, outer, focusedId, selectedIds, time
       const {folder} = await api.writePartFilm(projectId, title, {stage:film.stage,tracks:[{
         attrs:{title:'场内镜头','data-story-track':'shot'},clips:[],
       }]});
-      const ops: Op[] = [];
+      const ops: Op[] = film.storyStructure?[]:initializeStructure(film);
       if (track < 0) ops.push({op:'story-track-add',id:crypto.randomUUID(),name:'场次划分',at:film.tracks.length,kind:'scene'});
       const id = crypto.randomUUID();
       ops.push({op:'insert',track:track < 0 ? film.tracks.length : track,at:start,clip:{
@@ -347,7 +349,7 @@ export function StoryPane({ projectId, film, outer, focusedId, selectedIds, time
       </nav>
     </header>
     <div className="studio-contextbar">
-      <div className="studio-context-copy">{outer&&<button className="studio-back" disabled={navigating} onClick={()=>void leaveScene()}>返回场次主轨</button>}<span>{activeView==='overview'?'全片阅读':`${selectedTrack?.attrs?.title??(isShotFilm?'场内镜头':mode==='scenes'?'场次划分':'剧本线')} / ${objectKind}`}</span>{selected&&activeView!=='overview'&&<small>{storyTime(selected.at??0)}—{storyTime(clipEnd(selected))} · {(clipEnd(selected)-(selected.at??0)).toFixed(1)} 秒</small>}</div>
+      <div className="studio-context-copy">{outer&&<button className="studio-back" disabled={navigating} onClick={()=>void leaveScene()}>返回场次主轨</button>}{contextScene&&contextFilm&&<span className="story-stable-number" data-current-scene-number={sceneNumber(contextFilm,contextScene)}>场号 {sceneNumber(contextFilm,contextScene)}</span>}<span>{activeView==='overview'?'全片阅读':`${selectedTrack?.attrs?.title??(isShotFilm?'场内镜头':mode==='scenes'?'场次划分':'剧本线')} / ${objectKind}`}</span>{selected&&activeView!=='overview'&&<small>{storyTime(selected.at??0)}—{storyTime(clipEnd(selected))} · {(clipEnd(selected)-(selected.at??0)).toFixed(1)} 秒</small>}</div>
       <div className="studio-context-actions">
         {view!=='overview'&&<div className="studio-view-switch" aria-label="内容与影像">{isShotFilm?<><button aria-pressed={activeView==='board'} onClick={()=>setView('board')}>分镜</button><button disabled={!selected} aria-pressed={activeView==='script'} onClick={()=>setView('script')}>镜头详情</button></>:<button aria-pressed={activeView==='script'} onClick={()=>setView('script')}>{data?.kind==='beat'?'节拍':'剧本'}</button>}<button aria-pressed={view==='picture'} onClick={()=>setView('picture')}>影像</button></div>}
         {!outer&&view!=='overview'&&<button className="studio-secondary" disabled={pending>0} onClick={async()=>{await settle();const start=Math.max(timeMs/1000,...scenes.map(clipEnd),0);setSceneDraft({start,end:start+4,title:`场次 ${scenes.length+1}`,empty:true});setMode('scenes');setView('script');}}>新建空场次</button>}
@@ -360,6 +362,8 @@ export function StoryPane({ projectId, film, outer, focusedId, selectedIds, time
     {helpOpen&&<StoryHelp onClose={()=>setHelpOpen(false)} onAction={action=>void helpAction(action)}/>}
     {activeView==='overview' && <StoryOverview projectId={projectId} film={film} outer={outer} mediaBase={mediaBase} projectName={projectName} focusedId={focusedId} onLocalView={setView} settle={settle}/>}
     {activeView !== 'picture' && activeView !== 'overview' && <div className="studio-edit-layout"><StoryNavigator film={film} kind={sidebarKind} selectedId={selected?.id} onSelect={clip=>void focusHere(clip)}/><div ref={documentRef} className="story-document">
+      {!outer&&<StoryStructurePanel film={film} currentFilm={()=>filmRef.current} selectedIds={selectedIds} selected={selected} settle={settle} write={commit}/>}
+      {outer&&contextScene&&contextFilm&&<p className="studio-field-hint">{storyGroupPath(contextFilm,contextFilm.storyStructure?.members[contextScene.id])} · 场号 {sceneNumber(contextFilm,contextScene)}</p>}
       {!outer&&mode==='writing'&&<StoryDocumentLibrary film={film} at={timeMs/1000} write={commit} disabled={pending>0}/>}
       {sceneDraft && <section className="story-scene-draft" aria-label="划分场次">
         <strong>{sceneDraft.empty?'新建空场次':'从剧本选区划分场次'}</strong><p>{sceneDraft.empty?'从画面或场面开始，无需先写节拍。稍后可关联正文并添加空镜头。':'先按时间范围引用节拍，创建后可在来源关联中勾选具体段落。'}</p>

@@ -15,6 +15,8 @@
  *   pictureRect(kind, …)    → where a clip's picture lands on the stage (its `box`)
  */
 
+import {validStoryStructure} from './story-structure.mjs';
+
 export const FILM_FILE = 'film.html';
 /** The stage of a film that says none. */
 export const DEFAULT_STAGE = Object.freeze({ w: 1920, h: 1080 });
@@ -375,12 +377,13 @@ export function readFilm(value) {
   if ('clips' in value && !('tracks' in value)) {
     return fail(`${FILM_FILE} holds its clips in tracks: each <section> is a track.`);
   }
-  const extra = Object.keys(value).filter((k) => !['stage', 'tracks', 'keyframes', 'screenplay'].includes(k));
+  const extra = Object.keys(value).filter((k) => !['stage', 'tracks', 'keyframes', 'screenplay', 'storyStructure'].includes(k));
   if (extra.length) return fail(`${FILM_FILE} is a stage, its tracks and the keyframes its clips move by; there is nothing else: ${extra.join(' · ')}`);
   if (value.keyframes !== undefined && !(isObject(value.keyframes) && Object.entries(value.keyframes).every(([k, v]) => KEYFRAMES_NAME.test(k) && typeof v === 'string'))) {
     return fail(`${FILM_FILE}'s keyframes are named CSS @keyframes, each name its body's.`);
   }
   if (value.screenplay !== undefined && (!isObject(value.screenplay) || Object.entries(value.screenplay).some(([id,d]) => !id || ['__proto__','constructor','prototype'].includes(id) || !isObject(d) || typeof d.title !== 'string' || !Array.isArray(d.blocks) || d.blocks.some(b=>!isObject(b) || typeof b.id !== 'string' || !b.id || typeof b.text !== 'string') || new Set(d.blocks.map(b=>b.id)).size !== d.blocks.length))) return fail('Invalid screenplay documents or paragraph IDs.');
+  if(value.storyStructure!==undefined&&!validStoryStructure(value.storyStructure))return fail('Invalid story structure or duplicate scene numbers.');
   const stage = value.stage ?? DEFAULT_STAGE;
   if (!isObject(stage) || !(Number.isInteger(stage.w) && stage.w > 0) || !(Number.isInteger(stage.h) && stage.h > 0)) {
     return fail(`${FILM_FILE} wants a picture size of positive whole numbers: <meta name="viewport" content="width=1920, height=1080"> (without one, it is 1920 × 1080).`);
@@ -424,7 +427,7 @@ export function readFilm(value) {
   });
   if (problems.length) return { doc: null, problems };
   const keyframes = value.keyframes && Object.keys(value.keyframes).length ? { keyframes: { ...value.keyframes } } : {};
-  return { doc: { stage: { w: stage.w, h: stage.h }, tracks, ...keyframes, ...(value.screenplay ? {screenplay:structuredClone(value.screenplay)} : {}) }, problems };
+  return { doc: { stage: { w: stage.w, h: stage.h }, tracks, ...keyframes, ...(value.screenplay ? {screenplay:structuredClone(value.screenplay)} : {}), ...(value.storyStructure?{storyStructure:structuredClone(value.storyStructure)}:{}) }, problems };
 }
 
 /**
@@ -1244,22 +1247,22 @@ function baseFilmHtml(value, before = '') {
   return head + body + old.text.slice(old.layout.bodyEnd);
 }
 
-// Screenplay lives in inert, encoded metadata, separate from every timeline occurrence.
-const SCREENPLAY_META = /<meta name="openfilm-screenplay" content="([^"]*)">\n?/g;
+// Creative metadata is inert and encoded; timeline tracks and clips keep their native representation.
+const CREATIVE_META = /<meta name="openfilm-(screenplay|structure)" content="([^"]*)">\n?/g;
 export function readFilmFile(text) {
-  const result = readBaseFilmFile(text);
-  const match = [...text.matchAll(SCREENPLAY_META)][0];
-  if (!match) return result;
+  const result=readBaseFilmFile(text),matches=[...text.matchAll(CREATIVE_META)];
+  if(!matches.length)return result;
   try {
-    const screenplay = JSON.parse(decodeURIComponent(match[1]));
-    const value = {...result.value, screenplay};
-    const checked = readFilm(value);
+    const value={...result.value};
+    for(const match of matches)value[match[1]==='structure'?'storyStructure':'screenplay']=JSON.parse(decodeURIComponent(match[2]));
+    const checked=readFilm(value);
     return {...result,value,doc:checked.doc,problems:[...result.problems,...checked.problems]};
-  } catch { return {...result,doc:null,problems:[...result.problems,'Invalid screenplay metadata.']}; }
+  }catch{return {...result,doc:null,problems:[...result.problems,'Invalid creative metadata.']};}
 }
-export function filmHtml(value, before = '') {
-  const output = baseFilmHtml(value,before).replace(SCREENPLAY_META,'');
-  if (!value.screenplay || !Object.keys(value.screenplay).length) return output;
-  const meta = `<meta name="openfilm-screenplay" content="${encodeURIComponent(JSON.stringify(value.screenplay))}">\n`;
-  return /<\/head>/i.test(output) ? output.replace(/<\/head>/i,meta+'</head>') : meta+output;
+export function filmHtml(value,before='') {
+  const output=baseFilmHtml(value,before).replace(CREATIVE_META,'');
+  const meta=[['screenplay',value.screenplay],['structure',value.storyStructure]].filter(([,v])=>v&&Object.keys(v).length)
+    .map(([name,v])=>`<meta name="openfilm-${name}" content="${encodeURIComponent(JSON.stringify(v))}">\n`).join('');
+  if(!meta)return output;
+  return /<\/head>/i.test(output)?output.replace(/<\/head>/i,meta+'</head>'):meta+output.replace(/^\s*/,'\n');
 }

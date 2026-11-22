@@ -94,12 +94,14 @@ export function inverse(before: Film, after: Film, ops: Op[]): Op[] {
   const now = index(after);
   const ids = new Set<string>();
   const undo: Op[] = [];
+  if(JSON.stringify(before.storyStructure)!==JSON.stringify(after.storyStructure))undo.push({op:'story-structure',value:before.storyStructure?copy(before.storyStructure):null});
   /* In a batch that only moves clips between existing tracks and trims or removes them, a moved clip identifies
      its destination even if the overwrite removed every clip originally on that track. */
   const stableIndexes = ops.every((op) => op.op === 'split' || op.op === 'remove'
     || (op.op === 'props' && op.edits.every((e) => e.prop !== 'trackOrder' && (e.prop !== 'track' || typeof e.value === 'number'))));
   const movedTo = new Map<string, number>();
   for (const op of ops) {
+    if (op.op === 'story-structure') continue;
     if (op.op === 'screenplay') {
       undo.push({op:'screenplay',set:Object.fromEntries(Object.keys(op.set).map(id=>[id,before.screenplay?.[id] ? copy(before.screenplay[id]) : null]))});
       continue;

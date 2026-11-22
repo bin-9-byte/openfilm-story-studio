@@ -3713,6 +3713,7 @@ export const Timeline = React.memo(function Timeline({
                   {/* pinned to the left of the view so a clip wider than the screen still says what it is (pinLabels,
                       on scroll: scrolling rebuilds nothing) */}
                   <span className="flex min-w-0 origin-left items-center gap-1" data-pin={left} data-pin-max={width - 48} data-zoom-keep="">
+                    {block.storySceneNumber&&<span data-block-scene-number={block.storySceneNumber} className="shrink-0 text-[10px] font-semibold text-white/90">{block.storySceneNumber}</span>}
                     {block.clipId && storyBeatIds?.has(block.clipId) && <button
                       type="button" aria-label={`场次关联 · ${block.title}`} aria-pressed={Boolean(links?.has(block.clipId))}
                       title={links?.has(block.clipId) ? '跟随场次，点击解除关联' : '独立节拍，点击关联起点所在场次'}

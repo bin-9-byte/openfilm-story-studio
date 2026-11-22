@@ -80,3 +80,11 @@ BROWSER_URL=http://127.0.0.1:4751 node scripts/check-story-documents.mjs "/绝�
 ```
 
 该脚本以原片样例验证跨场段落引用、同一正文关联 A/B 两线及独立拖动、新建空场次和空镜头、镜头段落关联，以及离线重开和完整备份恢复。公开仓库不包含原片素材。
+
+
+幕／序列与稳定场号：编辑区展开「幕／序列与场号」，可创建分组并归入所选节拍／场次。旧工程可一次「固定现有场号」；新增场次会自动分配场号，移动不重排，删除保留号段。分组与场号和正文一起保存在本机，包含在完整工程备份中。规则与验收见 `story-structure.md`。
+
+```sh
+node --experimental-strip-types --test packages/openfilm/studio/ui/src/lib/story-structure.test.ts
+BROWSER_URL=http://127.0.0.1:4751 node scripts/check-story-structure.mjs "/绝对路径/原片验证样例"
+```

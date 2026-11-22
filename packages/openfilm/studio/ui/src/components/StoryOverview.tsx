@@ -1,9 +1,10 @@
 import * as React from 'react';
 import {api,projectEvents,type Clip,type Film,type ProjectFilm} from '@/api';
 import {beatEntries,clipEnd,confirmedSceneSources,sceneCandidates,shotBeatIds,shotSequenceDuration,storyData} from '@/lib/story-content';
+import {groupedStoryClips,sceneNumber,storyGroupPath,structureGroups} from '@/lib/story-structure';
 import {storyImageUrl} from '@/lib/story-media';
 import {shotPresentation,storyPartFolder,storyReadingGroups,storyScenes,storyShots,storyTime} from '@/lib/story-overview';
-import {locateStory,saveStoryPreference,storyPreference,type StoryView} from '@/lib/story-navigation';
+import {locateStory,rememberStoryLocation,saveStoryPreference,storyPreference,type StoryView} from '@/lib/story-navigation';
 import './StoryOverview.css';
 
 type Root={id:string;film:Film;base:string;name:string};
@@ -20,6 +21,7 @@ export function StoryOverview({projectId,film,outer,mediaBase,projectName,focuse
   const initialPosition=React.useRef(storyPreference(projectId));
   const [loading,setLoading]=React.useState(false);
   const [line,setLine]=React.useState('');
+  const [structureFilter,setStructureFilter]=React.useState('');
   const [locating,setLocating]=React.useState('');
   const [error,setError]=React.useState('');
   const viewport=React.useRef<HTMLDivElement>(null);
@@ -76,7 +78,7 @@ export function StoryOverview({projectId,film,outer,mediaBase,projectName,focuse
     try{
       await settle();
       let targetProject=root.id,atMs=(clip.at??0)*1000;
-      if(scene){const folder=storyPartFolder(scene);if(!folder)throw new Error('本场没有可打开的分镜工程。');const opened=await api.openPartFilm(root.id,folder);targetProject=opened.project.id;atMs=shotPresentation(scene,clip).localStart*1000;}
+      if(scene){rememberStoryLocation({projectId:root.id,rootId:root.id,clipId:scene.id,atMs:(scene.at??0)*1000,view:'overview',anchor,scrollTop:viewport.current?.scrollTop??0});const folder=storyPartFolder(scene);if(!folder)throw new Error('本场没有可打开的分镜工程。');const opened=await api.openPartFilm(root.id,folder);targetProject=opened.project.id;atMs=shotPresentation(scene,clip).localStart*1000;}
       const target={projectId:targetProject,rootId:root.id,clipId:clip.id,atMs,view,anchor,scrollTop:viewport.current?.scrollTop??0};
       if(targetProject===projectId)onLocalView(view);
       locateStory(target,projectId);
@@ -84,7 +86,9 @@ export function StoryOverview({projectId,film,outer,mediaBase,projectName,focuse
     finally{setLocating('');}
   }
   if(!root)return <div className="story-overview"><p>{rootError||'正在读取完整故事…'}</p></div>;
-  const scenes=storyScenes(root.film),groups=storyReadingGroups(root.film,line),lines=[...new Set(beatEntries(root.film).map(entry=>entry.line))];
+  const chronologicalScenes=storyScenes(root.film);
+  const scenes=groupedStoryClips(root.film,chronologicalScenes).filter(g=>!structureFilter||(structureFilter==='__ungrouped'&&g.id==='')||g.id===structureFilter||root.film.storyStructure?.groups.find(group=>group.id===g.id)?.parentId===structureFilter).flatMap(g=>g.clips);
+  const groups=storyReadingGroups(root.film,line),lines=[...new Set(beatEntries(root.film).map(entry=>entry.line))];
   const allBeats=new Map(beatEntries(root.film).map(entry=>[entry.clip.id,entry]));
   const activePart=outer&&outer.id===root.id?`parts/${outer.folder}`:null;
   const partOf=(scene:Clip)=>{const folder=storyPartFolder(scene);return folder===activePart?{film}:folder?parts.get(folder):undefined;};
@@ -104,13 +108,13 @@ export function StoryOverview({projectId,film,outer,mediaBase,projectName,focuse
         <button className="story-overview-edit" onClick={()=>void locate(clip,undefined,'script')} aria-label={`编辑正文 · ${storyData(clip)?.title}`}>编辑正文</button>
       </article>)}</div></div>)}
     </section>
-    <section id="story-boards" className="story-boards" aria-label="全片分镜总览"><h2>场次与分镜</h2>
-      {!scenes.length&&<p>尚未划分场次。剧本内容可先独立串读。</p>}
-      {scenes.map((scene,index)=>{
+    <section id="story-boards" className="story-boards" aria-label="全片分镜总览"><h2>场次与分镜</h2><label>结构分组<select aria-label="总览结构分组" value={structureFilter} onChange={e=>setStructureFilter(e.target.value)}><option value="">全部幕与序列</option>{structureGroups(root.film).map(g=><option key={g.id} value={g.id}>{storyGroupPath(root.film,g.id)}</option>)}<option value="__ungrouped">未分组</option></select></label>
+      {!scenes.length&&<p>{structureFilter?'此分组暂无场次。':'尚未划分场次。剧本内容可先独立串读。'}</p>}
+      {scenes.map((scene)=>{
         const data=storyData(scene)!,part=partOf(scene),shots=part?.film?storyShots(part.film):[];
         const confirmed=data.scriptSource==='confirmed',references=confirmed?confirmedSceneSources(root.film,scene):sceneCandidates(root.film,scene).map(entry=>({...entry,ref:null,changed:false}));
         return <article className="story-overview-scene" key={scene.id} data-overview-scene={scene.id} data-overview-anchor={`scene:${scene.id}`}>
-          <header><div><span>第 {index+1} 场 · {storyTime(scene.at??0)}—{storyTime(clipEnd(scene))}</span><h3>{data.title}</h3><p>{data.place}</p><p>预估 {(clipEnd(scene)-(scene.at??0)).toFixed(1)} 秒 · 实排 {part?.film?shotSequenceDuration(part.film).toFixed(1)+' 秒':'待读取'} · {shots.length} 镜</p></div><div className="story-actions"><button aria-label={`定位场次 · ${data.title}`} onClick={()=>void locate(scene)}>定位场次</button><button onClick={()=>void locate(scene,undefined,'script')} aria-label={`编辑场次 · ${data.title}`}>编辑场次</button></div></header>
+          <header><div><span data-overview-scene-number={sceneNumber(root.film,scene)}>场号 {sceneNumber(root.film,scene)} · {storyTime(scene.at??0)}—{storyTime(clipEnd(scene))}</span><h3>{data.title}</h3><p className="story-group-path">{storyGroupPath(root.film,root.film.storyStructure?.members[scene.id])}</p><p>{data.place}</p><p>预估 {(clipEnd(scene)-(scene.at??0)).toFixed(1)} 秒 · 实排 {part?.film?shotSequenceDuration(part.film).toFixed(1)+' 秒':'待读取'} · {shots.length} 镜</p></div><div className="story-actions"><button aria-label={`定位场次 · ${data.title}`} onClick={()=>void locate(scene)}>定位场次</button><button onClick={()=>void locate(scene,undefined,'script')} aria-label={`编辑场次 · ${data.title}`}>编辑场次</button></div></header>
           {data.summary&&<p className="story-overview-body">{data.summary}</p>}
           {data.script&&<details open><summary>旧版场次正文</summary><button className="story-legacy-content story-overview-body" onClick={()=>void locate(scene)} aria-label={`定位场次正文 · ${data.title}`}>{data.script}</button></details>}
           <div className="story-overview-sources"><span>{confirmed?'已确认来源':'时间候选'}：</span>{references.map((entry,i)=>entry.clip?<button key={entry.clip.id} onClick={()=>void locate(entry.clip!)}>{entry.line} · {storyData(entry.clip)?.title}{entry.changed?' · 待核对':''}</button>:<span key={i} className="story-review">来源已删除 · {entry.ref?.title}</span>)}{!references.length&&<span>暂无来源</span>}</div>

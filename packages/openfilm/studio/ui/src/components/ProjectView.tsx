@@ -663,6 +663,7 @@ export function ProjectView({ projectId, onProject }: {
         const data = clip && storyData(clip);
         if (data) {
           block.title = data.title;
+          if(data.kind==='scene'&&clip)block.storySceneNumber=film.film.storyStructure?.sceneNumbers[clip.id];
           block.color = data.kind === 'scene' ? '#365768' : data.kind === 'shot' ? '#65563d'
             : original?.attrs?.['data-story-track-id'] === 'a' ? '#735d3c' : '#554772';
           if (data.kind === 'beat' && !clip?.attrs?.['data-link']) block.storyIndependent = true;
